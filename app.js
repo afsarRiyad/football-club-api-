@@ -5,6 +5,9 @@ const morgan = require("morgan");
 
 const errorHandler = require("./middleware/errorHandler");
 const { apiLimiter } = require("./middleware/rateLimiter");
+const { applySecurity } = require("./middleware/security");
+const { auditMiddleware } = require("./middleware/auditLog");
+const { setupSwagger } = require("./config/swagger");
 
 // Route imports
 const authRoutes = require("./modules/auth/routes/authRoutes");
@@ -24,6 +27,9 @@ const statisticsRoutes = require("./modules/statistics/routes/statisticsRoutes")
 const uploadRoutes = require("./modules/uploads/routes/uploadRoutes");
 
 const app = express();
+
+// ─── Security Middleware ─────────────────────────────────────────────
+applySecurity(app);
 
 // ─── Global Middleware ───────────────────────────────────────────────
 // CORS
@@ -48,6 +54,12 @@ if (process.env.NODE_ENV === "development") {
 
 // Rate limiting
 app.use("/api", apiLimiter);
+
+// Audit logging middleware
+app.use("/api", auditMiddleware);
+
+// Swagger API documentation
+setupSwagger(app);
 
 // ─── Routes ──────────────────────────────────────────────────────────
 
