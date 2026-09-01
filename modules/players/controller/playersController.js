@@ -108,3 +108,159 @@ exports.getPlayersByClub = catchAsync(async (req, res, next) => {
     data: { players },
   });
 });
+
+// ─── Bulk Import Players ────────────────────────────────────────────
+exports.bulkImportPlayers = catchAsync(async (req, res, next) => {
+  const { players: playersData } = req.body;
+
+  if (!Array.isArray(playersData) || playersData.length === 0) {
+    return next(new AppError("Please provide an array of players.", 400));
+  }
+
+  if (playersData.length > 50) {
+    return next(new AppError("Cannot import more than 50 players at once.", 400));
+  }
+
+  const results = {
+    created: [],
+    errors: [],
+  };
+
+  for (let i = 0; i < playersData.length; i++) {
+    try {
+      const player = await Player.create(playersData[i]);
+      results.created.push({
+        index: i,
+        player: {
+          id: player._id,
+          name: `${player.firstName} ${player.lastName}`,
+          number: player.number,
+        },
+      });
+    } catch (error) {
+      results.errors.push({
+        index: i,
+        data: playersData[i],
+        error: error.message,
+      });
+    }
+  }
+
+  res.status(201).json({
+    success: true,
+    results: {
+      total: playersData.length,
+      created: results.created.length,
+      failed: results.errors.length,
+    },
+    data: results,
+  });
+});
+
+// ─── Transfer Player Between Clubs ──────────────────────────────────
+exports.transferPlayer = catchAsync(async (req, res, next) => {
+  const { toClubId, newNumber, transferNotes } = req.body;
+
+  if (!toClubId) {
+    return next(new AppError("Target club ID is required.", 400));
+  }
+
+  const player = await Player.findById(req.params.id);
+  if (!player) {
+    return next(new AppError("Player not found.", 404));
+  }
+
+  const fromClubId = player.club.toString();
+  if (fromClubId === toClubId) {
+    return next(new AppError("Player is already at this club.", 400));
+  }
+
+  // Check if number is available at new club
+  if (newNumber) {
+    const numberTaken = await Player.findOne({
+      club: toClubId,
+      number: newNumber,
+      _id: { $ne: player._id },
+    });
+    if (numberTaken) {
+      return next(new AppError(`Number ${newNumber} is already taken at the target club.`, 400));
+    }
+  }
+
+  // Remove from any teams at old club
+  const Team = require("../../teams/model/Team");
+  await Team.updateMany(
+    { club: fromClubId, players: player._id },
+    { $pull: { players: player._id } }
+  );
+
+  // Update player
+  player.club = toClubId;
+  if (newNumber) player.number = newNumber;
+  player.status = "ACTIVE";
+  player.joinDate = new Date();
+  await player.save();
+
+  res.status(200).json({
+    success: true,
+    message: `Player transferred successfully.${transferNotes ? " Notes: " + transferNotes : ""}`,
+    data: { player },
+  });
+});
+
+// ─── Link Player to User Account ────────────────────────────────────
+exports.linkToUser = catchAsync(async (req, res, next) => {
+  const { userId } = req.body;
+
+  if (!userId) {
+    return next(new AppError("User ID is required.", 400));
+  }
+
+  const User = require("../../auth/model/User");
+
+  const user = await User.findById(userId);
+  if (!user) {
+    return next(new AppError("User not found.", 404));
+  }
+
+  const player = await Player.findById(req.params.id);
+  if (!player) {
+    return next(new AppError("Player not found.", 404));
+  }
+
+  // Check if this user is already linked to another player
+  const existingLink = await Player.findOne({ user: userId, _id: { $ne: player._id } });
+  if (existingLink) {
+    return next(new AppError("This user is already linked to another player.", 400));
+  }
+
+  player.user = userId;
+  await player.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Player linked to user account successfully.",
+    data: { player },
+  });
+});
+
+// ─── Unlink Player from User Account ────────────────────────────────
+exports.unlinkFromUser = catchAsync(async (req, res, next) => {
+  const player = await Player.findById(req.params.id);
+  if (!player) {
+    return next(new AppError("Player not found.", 404));
+  }
+
+  if (!player.user) {
+    return next(new AppError("Player is not linked to any user account.", 400));
+  }
+
+  player.user = undefined;
+  await player.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Player unlinked from user account.",
+    data: { player },
+  });
+});

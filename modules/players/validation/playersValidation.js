@@ -56,3 +56,35 @@ exports.updatePlayerSchema = z.object({
 exports.playerIdParam = z.object({
   id: z.string().regex(/^[a-f\d]{24}$/i, "Invalid player ID"),
 });
+
+exports.bulkImportSchema = z.object({
+  players: z
+    .array(
+      z.object({
+        club: z.string().regex(/^[a-f\d]{24}$/i, "Invalid club ID"),
+        firstName: z.string().min(1).max(50),
+        lastName: z.string().min(1).max(50),
+        number: z.number().int().min(1).max(99).optional(),
+        position: z.enum(positions),
+        subPosition: z.enum(subPositions).optional(),
+        dateOfBirth: z.string().datetime().optional(),
+        nationality: z.string().optional(),
+        height: z.number().positive().optional(),
+        weight: z.number().positive().optional(),
+        preferredFoot: z.enum(feet).optional(),
+        bio: z.string().max(1000).optional(),
+      })
+    )
+    .min(1, "At least one player is required")
+    .max(50, "Cannot import more than 50 players at once"),
+});
+
+exports.transferPlayerSchema = z.object({
+  toClubId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid club ID"),
+  newNumber: z.number().int().min(1).max(99).optional(),
+  transferNotes: z.string().max(500).optional(),
+});
+
+exports.linkToUserSchema = z.object({
+  userId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid user ID"),
+});
