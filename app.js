@@ -1,0 +1,91 @@
+const express = require("express");
+const cors = require("cors");
+const cookieParser = require("cookie-parser");
+const morgan = require("morgan");
+
+const errorHandler = require("./middleware/errorHandler");
+const { apiLimiter } = require("./middleware/rateLimiter");
+
+// Route imports
+const authRoutes = require("./modules/auth/routes/authRoutes");
+const usersRoutes = require("./modules/users/routes/usersRoutes");
+const clubRoutes = require("./modules/club/routes/clubRoutes");
+const playersRoutes = require("./modules/players/routes/playersRoutes");
+const teamsRoutes = require("./modules/teams/routes/teamsRoutes");
+const matchesRoutes = require("./modules/matches/routes/matchesRoutes");
+const competitionsRoutes = require("./modules/competitions/routes/competitionsRoutes");
+const seasonsRoutes = require("./modules/seasons/routes/seasonsRoutes");
+const newsRoutes = require("./modules/news/routes/newsRoutes");
+const galleryRoutes = require("./modules/gallery/routes/galleryRoutes");
+const academyRoutes = require("./modules/academy/routes/academyRoutes");
+const trainingRoutes = require("./modules/training/routes/trainingRoutes");
+const membersRoutes = require("./modules/members/routes/membersRoutes");
+const statisticsRoutes = require("./modules/statistics/routes/statisticsRoutes");
+const uploadRoutes = require("./modules/uploads/routes/uploadRoutes");
+
+const app = express();
+
+// ─── Global Middleware ───────────────────────────────────────────────
+// CORS
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true,
+  })
+);
+
+// Body parser
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+// Cookie parser
+app.use(cookieParser());
+
+// Development logging
+if (process.env.NODE_ENV === "development") {
+  app.use(morgan("dev"));
+}
+
+// Rate limiting
+app.use("/api", apiLimiter);
+
+// ─── Routes ──────────────────────────────────────────────────────────
+
+// Health check
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "FClub Backend is running 🏟️",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// API routes
+app.use("/api/auth", authRoutes);
+app.use("/api/users", usersRoutes);
+app.use("/api/clubs", clubRoutes);
+app.use("/api/players", playersRoutes);
+app.use("/api/teams", teamsRoutes);
+app.use("/api/matches", matchesRoutes);
+app.use("/api/competitions", competitionsRoutes);
+app.use("/api/seasons", seasonsRoutes);
+app.use("/api/news", newsRoutes);
+app.use("/api/gallery", galleryRoutes);
+app.use("/api/academy", academyRoutes);
+app.use("/api/training", trainingRoutes);
+app.use("/api/members", membersRoutes);
+app.use("/api/statistics", statisticsRoutes);
+app.use("/api/uploads", uploadRoutes);
+
+// ─── 404 Handler ─────────────────────────────────────────────────────
+app.all("*", (req, res, next) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.originalUrl} not found`,
+  });
+});
+
+// ─── Global Error Handler ────────────────────────────────────────────
+app.use(errorHandler);
+
+module.exports = app;
