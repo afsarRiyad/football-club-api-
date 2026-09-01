@@ -2,7 +2,7 @@
 
 > Football Club Management Platform — Backend API  
 > GitHub: https://github.com/afsarRiyad/football-club-api-  
-> Stack: Node.js, Express, MongoDB, Socket.io, Cloudinary, Zod
+> Stack: Node.js, Express, MongoDB, Socket.io, Cloudinary, Zod, Redis, Docker
 
 ---
 
@@ -11,7 +11,7 @@
 ```
 fclub-backend/
 ├── config/              # Database, Cloudinary, Socket.io config
-├── middleware/           # Auth, RBAC, upload, validation, error handler, rate limiter
+├── middleware/           # Auth, RBAC, upload, validation, security, audit, rate limiter
 ├── modules/             # Feature modules (MVC pattern)
 │   ├── academy/         # Youth academy management
 │   ├── auth/            # Register, login, password reset
@@ -28,10 +28,14 @@ fclub-backend/
 │   ├── training/        # Training sessions, attendance
 │   ├── uploads/         # File upload endpoints
 │   └── users/           # User CRUD, role management
-├── scripts/             # Seed scripts
-├── utils/               # AppError, catchAsync, upload helpers
+├── scripts/             # Database seed scripts
+├── utils/               # AppError, catchAsync, upload helpers, cache, email, pagination
+├── tests/               # Jest test files
+├── .github/workflows/   # GitHub Actions CI/CD
 ├── app.js               # Express app setup + route registration
-├── server.js            # HTTP server + Socket.io init
+├── server.js            # HTTP server + Socket.io + graceful shutdown
+├── Dockerfile           # Production Docker image
+├── docker-compose.yml   # Local dev (MongoDB + Redis + API)
 └── package.json
 ```
 
@@ -63,6 +67,15 @@ modules/<name>/
 | **morgan** | HTTP request logging |
 | **cors** | Cross-origin requests |
 | **cookie-parser** | Cookie parsing |
+| **helmet** | Security headers (XSS, clickjacking) |
+| **compression** | Gzip response compression |
+| **express-mongo-sanitize** | NoSQL injection protection |
+| **hpp** | HTTP parameter pollution protection |
+| **ioredis** | Redis caching (with in-memory fallback) |
+| **nodemailer** | Email service (password resets, notifications) |
+| **swagger-jsdoc + swagger-ui** | API documentation |
+| **uuid** | Request ID tracing |
+| **jest + supertest** | Testing framework |
 
 ---
 
@@ -701,11 +714,178 @@ Multer memory storage → stream to Cloudinary. Attaches `req.uploadedFile` or `
 
 20 requests per 15 minutes per IP (stricter for login/register).
 
+### `applySecurity(app)`
+
+Applies all security middleware at once:
+- **Helmet** — Security headers (XSS, clickjacking, MIME sniffing)
+- **Compression** — Gzip responses > 1KB
+- **mongo-sanitize** — Strips `$` and `.` from req.body/query/params
+- **HPP** — Prevents HTTP parameter pollution
+- **Request ID** — UUID-based `X-Request-Id` header on every request
+- **Additional headers** — X-Content-Type-Options, X-Frame-Options, etc.
+
+### `auditMiddleware`
+
+Logs user actions to `AuditLog` collection. Attach audit data to `req.audit`:
+```javascript
+req.audit = { action: "CREATE", resource: "Player", resourceId: player._id };
+```
+
+### `cacheMiddleware(ttlSeconds)`
+
+Caches GET responses in Redis (or in-memory fallback). Usage:
+```javascript
+router.get("/", cacheMiddleware(300), controller.getAll);
+```
+
 ### `errorHandler`
 
 - **Development:** Full error + stack trace
 - **Production:** Operational errors only, generic message for others
 - Handles: CastError, duplicate fields, validation errors, JWT errors
+
+---
+
+## 📚 API Documentation (Swagger)
+
+Access Swagger UI at: `http://localhost:5000/api-docs`
+
+Raw JSON spec: `http://localhost:5000/api-docs.json`
+
+All endpoints are documented with request/response schemas.
+
+---
+
+## 📧 Email Service
+
+Uses Nodemailer for:
+- **Password reset emails** — `sendPasswordResetEmail(email, token, url)`
+- **Welcome emails** — `sendWelcomeEmail(email, name)`
+
+Development: Uses Ethereal test accounts (preview URLs in console)
+Production: Configure SMTP via environment variables
+
+```javascript
+const { sendPasswordResetEmail, sendWelcomeEmail } = require("../utils/email");
+
+await sendPasswordResetEmail(user.email, resetToken, resetURL);
+await sendWelcomeEmail(user.email, user.name);
+```
+
+---
+
+## ⚡ Redis Caching
+
+Falls back to in-memory cache if Redis is unavailable.
+
+```javascript
+const { cacheGet, cacheSet, cacheDel, cacheMiddleware } = require("../utils/cache");
+
+// Manual caching
+await cacheSet("players:club123", players, 300); // TTL: 5 min
+const cached = await cacheGet("players:club123");
+await cacheDel("players:*"); // Delete by pattern
+
+// Middleware caching
+router.get("/", cacheMiddleware(300), controller.getAll);
+```
+
+---
+
+## 🐳 Docker
+
+### Quick Start
+
+```bash
+npm run docker:up    # Starts MongoDB + Redis + API
+npm run docker:down  # Stops all containers
+```
+
+### Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| API | 5000 | Express backend |
+| MongoDB | 27017 | Database |
+| Redis | 6379 | Cache |
+
+---
+
+## 🧪 Testing
+
+```bash
+npm test              # Run all tests
+npm run test:watch    # Watch mode
+npm run test:coverage # Coverage report
+```
+
+### Test Files
+
+- `tests/health.test.js` — Health check endpoint
+- `tests/auth.test.js` — Register, login, profile
+
+---
+
+## 🔄 CI/CD (GitHub Actions)
+
+Located at `.github/workflows/ci.yml`
+
+**Pipeline:**
+1. Checkout code
+2. Setup Node.js 20
+3. Install dependencies
+4. Run tests against MongoDB service
+5. Deploy notification (on main branch push)
+
+---
+
+## 🔒 Graceful Shutdown
+
+`server.js` handles SIGTERM/SIGINT signals:
+1. Stops accepting new HTTP connections
+2. Closes Socket.io connections
+3. Closes MongoDB connection
+4. Waits up to 30s before force exit
+
+---
+
+## 📄 Audit Logging
+
+Tracks all user actions in `AuditLog` collection.
+
+```javascript
+const { logAudit } = require("../middleware/auditLog");
+
+await logAudit({
+  action: "CREATE",
+  resource: "Player",
+  resourceId: player._id,
+  req: req,
+});
+```
+
+**Logged actions:** CREATE, UPDATE, DELETE, LOGIN, LOGOUT, REGISTER, PASSWORD_CHANGE, PASSWORD_RESET, ROLE_CHANGE, FILE_UPLOAD, FILE_DELETE, PLAYER_TRANSFER, BULK_IMPORT
+
+---
+
+## 📐 Pagination
+
+```javascript
+const { parsePagination, buildPagination } = require("../utils/pagination");
+
+// In controller
+const { page, limit, skip, sort } = parsePagination(req.query);
+const total = await Model.countDocuments(filter);
+const docs = await Model.find(filter).skip(skip).limit(limit).sort(sort);
+
+res.json({
+  success: true,
+  ...buildPagination(total, page, limit),
+  data: { docs },
+});
+```
+
+**Query params:** `?page=1&limit=20&sort=-createdAt`
 
 ---
 
@@ -776,6 +956,17 @@ CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
 CLOUDINARY_FOLDER=fclub
 
+# Redis (optional - falls back to in-memory cache)
+REDIS_URL=redis://localhost:6379
+
+# Email (optional - uses Ethereal in development)
+SMTP_HOST=smtp.ethereal.email
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_email@example.com
+SMTP_PASS=your_password
+EMAIL_FROM=FClub <noreply@fclub.com>
+
 # Frontend URL (for CORS)
 FRONTEND_URL=http://localhost:3000
 ```
@@ -799,6 +990,28 @@ npm run seed
 
 # Seed with fresh database
 npm run seed:drop
+
+# Run tests
+npm test
+npm run test:watch    # Watch mode
+npm run test:coverage # With coverage
+
+# Docker
+npm run docker:up     # Start MongoDB + Redis + API
+npm run docker:down   # Stop containers
+npm run docker:logs   # View logs
+```
+
+### Docker Quick Start
+
+```bash
+# Start everything with Docker
+npm run docker:up
+
+# API available at http://localhost:5000
+# Swagger docs at http://localhost:5000/api-docs
+# MongoDB at localhost:27017
+# Redis at localhost:6379
 ```
 
 ---
