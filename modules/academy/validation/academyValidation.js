@@ -8,6 +8,7 @@ exports.createAcademySchema = z.object({
   description: z.string().optional(),
   ageGroup: z.enum(ageGroups),
   headCoach: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+  photo: z.string().optional(),
   schedule: z
     .object({
       trainingDays: z.array(z.string()).optional(),
@@ -21,6 +22,7 @@ exports.updateAcademySchema = z.object({
   description: z.string().optional(),
   ageGroup: z.enum(ageGroups).optional(),
   headCoach: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+  photo: z.string().optional(),
   schedule: z
     .object({
       trainingDays: z.array(z.string()).optional(),

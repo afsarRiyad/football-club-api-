@@ -32,6 +32,10 @@ const academySchema = new mongoose.Schema(
         ref: "Player",
       },
     ],
+    photo: {
+      type: String,
+      default: "",
+    },
     schedule: {
       trainingDays: [{ type: String }],
       trainingTime: { type: String, default: "" },

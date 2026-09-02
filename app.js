@@ -4,6 +4,7 @@ const cookieParser = require("cookie-parser");
 const morgan = require("morgan");
 
 const errorHandler = require("./middleware/errorHandler");
+const ensureDB = require("./middleware/dbCheck");
 const { apiLimiter } = require("./middleware/rateLimiter");
 const { applySecurity } = require("./middleware/security");
 const { auditMiddleware } = require("./middleware/auditLog");
@@ -32,10 +33,21 @@ const app = express();
 applySecurity(app);
 
 // ─── Global Middleware ───────────────────────────────────────────────
-// CORS
+// CORS — support comma-separated list of origins
+const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000,http://localhost:3001")
+  .split(",")
+  .map((o) => o.trim());
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
@@ -62,6 +74,9 @@ app.use("/api", auditMiddleware);
 setupSwagger(app);
 
 // ─── Routes ──────────────────────────────────────────────────────────
+
+// DB reconnect check — ensures MongoDB is alive on Render free tier cold starts
+app.use("/api", ensureDB);
 
 // Health check
 app.get("/api/health", (req, res) => {
