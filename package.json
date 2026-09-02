@@ -40,16 +40,29 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.1",
+    "@babel/preset-env": "^8.0.2",
+    "babel-jest": "^30.5.1",
     "jest": "^30.5.1",
     "nodemon": "^3.1.9",
     "supertest": "^7.2.2"
   },
   "jest": {
     "testEnvironment": "node",
-    "setupFiles": ["./tests/setup.js"],
-    "testMatch": ["**/tests/**/*.test.js"],
+    "setupFiles": [
+      "./tests/setup.js"
+    ],
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
     "verbose": true,
     "forceExit": true,
-    "detectOpenHandles": true
+    "detectOpenHandles": true,
+    "transform": {
+      "^.+\\.js$": "babel-jest"
+    },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(uuid)/)"
+    ]
   }
 }

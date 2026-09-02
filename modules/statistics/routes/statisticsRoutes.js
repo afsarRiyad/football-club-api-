@@ -9,7 +9,8 @@ const {
   updateStatisticSchema,
 } = require("../validation/statisticsValidation");
 
-// Public analytics routes
+// Public routes
+router.get("/", statisticsController.getAllStatistics);
 router.get("/top-scorers", statisticsController.getTopScorers);
 router.get("/standings", statisticsController.getTeamStandings);
 
@@ -17,9 +18,9 @@ router.get("/standings", statisticsController.getTeamStandings);
 router.use(protect);
 
 router.get(
-  "/",
+  "/:id",
   authorize("SUPER_ADMIN", "CLUB_ADMIN", "TEAM_MANAGER", "COACH"),
-  statisticsController.getAllStatistics
+  statisticsController.getStatistic
 );
 
 router.get(

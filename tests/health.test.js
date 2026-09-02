@@ -1,7 +1,13 @@
 const request = require("supertest");
-const app = require("../app");
+const createTestApp = require("./mocks/app");
 
 describe("Health Check", () => {
+  let app;
+  
+  beforeAll(() => {
+    app = createTestApp();
+  });
+  
   it("GET /api/health should return 200", async () => {
     const res = await request(app).get("/api/health");
 

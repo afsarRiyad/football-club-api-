@@ -1,4 +1,8 @@
 const mongoose = require("mongoose");
+const path = require("path");
+
+// Load .env from project root (ensures correct values override system env)
+require("dotenv").config({ path: path.resolve(__dirname, "../.env"), override: true });
 
 const connectDB = async () => {
   try {

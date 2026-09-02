@@ -64,15 +64,19 @@ exports.getAllNews = catchAsync(async (req, res, next) => {
 });
 
 exports.getNews = catchAsync(async (req, res, next) => {
-  // Support both slug and ID lookup
-  const article = await News.findOne({
-    $or: [
-      { slug: req.params.slug },
-      { _id: req.params.slug },
-    ],
-  })
+  const mongoose = require("mongoose");
+  const param = req.params.slug;
+
+  // Look up by slug first; fall back to ID if valid ObjectId
+  let article = await News.findOne({ slug: param })
     .populate("author", "name photo")
     .populate("club", "name slug logo");
+
+  if (!article && mongoose.Types.ObjectId.isValid(param)) {
+    article = await News.findById(param)
+      .populate("author", "name photo")
+      .populate("club", "name slug logo");
+  }
 
   if (!article) {
     return next(new AppError("Article not found.", 404));
