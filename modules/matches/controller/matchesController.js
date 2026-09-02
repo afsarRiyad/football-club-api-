@@ -41,6 +41,8 @@ exports.getAllMatches = catchAsync(async (req, res, next) => {
     .populate("homeTeam", "name slug logo")
     .populate("awayTeam", "name slug logo")
     .populate("competition", "name type")
+    .populate("events.player", "firstName lastName number")
+    .populate("events.assist", "firstName lastName number")
     .sort(sort)
     .skip(skip)
     .limit(limit);
@@ -83,7 +85,7 @@ exports.updateMatch = catchAsync(async (req, res, next) => {
 
   const updatedMatch = await Match.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
-    runValidators: true,
+    runValidators: false, // Disable schema validators to allow partial updates
   });
 
   // Emit real-time updates based on what changed

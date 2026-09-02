@@ -5,7 +5,7 @@ const morgan = require("morgan");
 
 const errorHandler = require("./middleware/errorHandler");
 const ensureDB = require("./middleware/dbCheck");
-const { apiLimiter } = require("./middleware/rateLimiter");
+// Rate limiting removed from global — only applied to auth routes
 const { applySecurity } = require("./middleware/security");
 const { auditMiddleware } = require("./middleware/auditLog");
 const { setupSwagger } = require("./config/swagger");
@@ -26,6 +26,7 @@ const trainingRoutes = require("./modules/training/routes/trainingRoutes");
 const membersRoutes = require("./modules/members/routes/membersRoutes");
 const statisticsRoutes = require("./modules/statistics/routes/statisticsRoutes");
 const uploadRoutes = require("./modules/uploads/routes/uploadRoutes");
+const tournamentRoutes = require("./modules/tournaments/routes/tournamentRoutes");
 
 const app = express();
 
@@ -64,8 +65,7 @@ if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 }
 
-// Rate limiting
-app.use("/api", apiLimiter);
+// Rate limiting — only on auth routes (login, register, etc.)
 
 // Audit logging middleware
 app.use("/api", auditMiddleware);
@@ -103,6 +103,7 @@ app.use("/api/training", trainingRoutes);
 app.use("/api/members", membersRoutes);
 app.use("/api/statistics", statisticsRoutes);
 app.use("/api/uploads", uploadRoutes);
+app.use("/api/tournaments", tournamentRoutes);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────
 app.all("*", (req, res, next) => {

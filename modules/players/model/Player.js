@@ -80,6 +80,43 @@ const playerSchema = new mongoose.Schema(
       default: "",
       maxlength: [1000, "Bio cannot exceed 1000 characters"],
     },
+    // Player attributes (0–99 scale)
+    pac: {
+      type: Number,
+      min: 0,
+      max: 99,
+      default: 50,
+    },
+    sho: {
+      type: Number,
+      min: 0,
+      max: 99,
+      default: 50,
+    },
+    pas: {
+      type: Number,
+      min: 0,
+      max: 99,
+      default: 50,
+    },
+    dri: {
+      type: Number,
+      min: 0,
+      max: 99,
+      default: 50,
+    },
+    def: {
+      type: Number,
+      min: 0,
+      max: 99,
+      default: 50,
+    },
+    phy: {
+      type: Number,
+      min: 0,
+      max: 99,
+      default: 50,
+    },
     joinDate: {
       type: Date,
       default: Date.now,

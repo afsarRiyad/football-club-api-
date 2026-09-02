@@ -38,7 +38,10 @@ exports.createMatchSchema = z.object({
 });
 
 exports.updateMatchSchema = z.object({
-  matchDate: z.string().datetime().optional(),
+  matchDate: z.preprocess((val) => {
+    if (val === "" || val === undefined || val === null) return undefined;
+    return val;
+  }, z.string().datetime().optional()),
   kickoff: z.string().optional(),
   venue: z
     .object({
@@ -56,7 +59,7 @@ exports.updateMatchSchema = z.object({
   attendance: z.number().int().positive().optional(),
   referee: z.string().optional(),
   notes: z.string().optional(),
-});
+}).partial();
 
 exports.addEventSchema = matchEventSchema;
 

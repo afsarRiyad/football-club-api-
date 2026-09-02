@@ -75,6 +75,17 @@ const matchSchema = new mongoose.Schema(
       away: { type: Number, default: 0 },
     },
     events: [matchEventSchema],
+    stats: {
+      possession: { home: { type: Number, default: 50 }, away: { type: Number, default: 50 } },
+      shots: { home: { type: Number, default: 0 }, away: { type: Number, default: 0 } },
+      shotsOnTarget: { home: { type: Number, default: 0 }, away: { type: Number, default: 0 } },
+      corners: { home: { type: Number, default: 0 }, away: { type: Number, default: 0 } },
+      fouls: { home: { type: Number, default: 0 }, away: { type: Number, default: 0 } },
+      offsides: { home: { type: Number, default: 0 }, away: { type: Number, default: 0 } },
+      yellowCards: { home: { type: Number, default: 0 }, away: { type: Number, default: 0 } },
+      redCards: { home: { type: Number, default: 0 }, away: { type: Number, default: 0 } },
+      saves: { home: { type: Number, default: 0 }, away: { type: Number, default: 0 } },
+    },
     attendance: {
       type: Number,
     },

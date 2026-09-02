@@ -19,7 +19,7 @@ const academySchema = new mongoose.Schema(
     },
     ageGroup: {
       type: String,
-      enum: ["U8", "U10", "U12", "U14", "U16", "U18", "U21"],
+      enum: ["SENIOR", "U8", "U10", "U12", "U14", "U16", "U18", "U21"],
       required: [true, "Age group is required"],
     },
     headCoach: {

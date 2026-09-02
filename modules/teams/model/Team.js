@@ -76,6 +76,10 @@ const teamSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Player",
     },
+    viceCaptain: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Player",
+    },
     formation: {
       type: String,
       default: "4-3-3",

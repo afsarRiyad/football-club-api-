@@ -1,6 +1,6 @@
 const { z } = require("zod");
 
-const ageGroups = ["U8", "U10", "U12", "U14", "U16", "U18", "U21"];
+const ageGroups = ["SENIOR", "U8", "U10", "U12", "U14", "U16", "U18", "U21"];
 
 exports.createAcademySchema = z.object({
   club: z.string().regex(/^[a-f\d]{24}$/i, "Invalid club ID"),

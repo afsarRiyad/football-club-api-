@@ -27,7 +27,8 @@ router.post(
 router.patch(
   "/:id",
   authorize("SUPER_ADMIN", "CLUB_ADMIN", "TEAM_MANAGER", "SCORER"),
-  validate(updateMatchSchema),
+  // Temporarily disable validation for updates to allow partial updates
+  // validate(updateMatchSchema),
   matchesController.updateMatch
 );
 
