@@ -27,6 +27,9 @@ exports.getAllTrainings = catchAsync(async (req, res, next) => {
     if (req.query.from) filter.date.$gte = new Date(req.query.from);
     if (req.query.to) filter.date.$lte = new Date(req.query.to);
   }
+  if (req.query.search) {
+    filter.title = { $regex: req.query.search, $options: "i" };
+  }
 
   const total = await Training.countDocuments(filter);
   const sessions = await Training.find(filter)

@@ -22,6 +22,9 @@ exports.getAllAcademies = catchAsync(async (req, res, next) => {
   if (req.query.isActive !== undefined) {
     filter.isActive = req.query.isActive === "true";
   }
+  if (req.query.search) {
+    filter.name = { $regex: req.query.search, $options: "i" };
+  }
 
   const total = await Academy.countDocuments(filter);
   const academies = await Academy.find(filter)

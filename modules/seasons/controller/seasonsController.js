@@ -18,6 +18,9 @@ exports.getAllSeasons = catchAsync(async (req, res, next) => {
   if (req.query.isActive !== undefined) {
     filter.isActive = req.query.isActive === "true";
   }
+  if (req.query.search) {
+    filter.name = { $regex: req.query.search, $options: "i" };
+  }
 
   const seasons = await Season.find(filter)
     .populate("club", "name slug")

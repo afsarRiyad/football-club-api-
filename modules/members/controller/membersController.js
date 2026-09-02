@@ -22,6 +22,17 @@ exports.getAllMembers = catchAsync(async (req, res, next) => {
   if (req.query.isActive !== undefined) {
     filter.isActive = req.query.isActive === "true";
   }
+  if (req.query.search) {
+    // Search by user name or email — need to do a lookup
+    const User = require("../../auth/model/User");
+    const matchingUsers = await User.find({
+      $or: [
+        { name: { $regex: req.query.search, $options: "i" } },
+        { email: { $regex: req.query.search, $options: "i" } },
+      ],
+    }).select("_id");
+    filter.user = { $in: matchingUsers.map((u) => u._id) };
+  }
 
   const total = await Member.countDocuments(filter);
   const members = await Member.find(filter)
