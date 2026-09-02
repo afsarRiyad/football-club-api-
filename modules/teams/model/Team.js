@@ -1,5 +1,27 @@
 const mongoose = require("mongoose");
 
+const startingXIEntrySchema = new mongoose.Schema(
+  {
+    player: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Player",
+      required: true,
+    },
+    position: {
+      type: String,
+      required: true,
+      // e.g. "GK", "LB", "CB", "RB", "CDM", "CM", "CAM", "LW", "RW", "ST"
+    },
+    slotIndex: {
+      type: Number,
+      required: true,
+      min: 0,
+      max: 10,
+    },
+  },
+  { _id: false }
+);
+
 const teamSchema = new mongoose.Schema(
   {
     club: {
@@ -54,6 +76,12 @@ const teamSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Player",
     },
+    formation: {
+      type: String,
+      default: "4-3-3",
+      // e.g. "4-3-3", "4-4-2", "3-5-2", "4-2-3-1", "3-4-3", "5-3-2"
+    },
+    startingXI: [startingXIEntrySchema],
     isActive: {
       type: Boolean,
       default: true,

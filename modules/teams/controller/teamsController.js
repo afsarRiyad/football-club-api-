@@ -32,6 +32,7 @@ exports.getAllTeams = catchAsync(async (req, res, next) => {
     .populate("manager", "name email")
     .populate("coach", "name email")
     .populate("players", "firstName lastName number position")
+    .populate("startingXI.player", "firstName lastName number position photo")
     .sort("-createdAt")
     .skip(skip)
     .limit(limit);
@@ -52,7 +53,8 @@ exports.getTeam = catchAsync(async (req, res, next) => {
     .populate("manager", "name email")
     .populate("coach", "name email")
     .populate("players", "firstName lastName number position photo status")
-    .populate("captain", "firstName lastName number");
+    .populate("captain", "firstName lastName number")
+    .populate("startingXI.player", "firstName lastName number position photo status");
 
   if (!team) {
     return next(new AppError("Team not found.", 404));
