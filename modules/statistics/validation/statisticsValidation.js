@@ -1,49 +1,32 @@
 const { z } = require("zod");
 
-const statTypes = ["PLAYER_SEASON", "TEAM_SEASON", "TEAM_MATCH"];
+const statTypes = [
+  "GOALS",
+  "ASSISTS",
+  "CLEAN_SHEETS",
+  "YELLOW_CARDS",
+  "RED_CARDS",
+  "APPEARANCES",
+  "MINUTES_PLAYED",
+];
 
 exports.createStatisticSchema = z.object({
   club: z.string().regex(/^[a-f\d]{24}$/i, "Invalid club ID"),
-  player: z.string().regex(/^[a-f\d]{24}$/i).optional(),
-  team: z.string().regex(/^[a-f\d]{24}$/i).optional(),
-  season: z.string().regex(/^[a-f\d]{24}$/i).optional(),
-  competition: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+  player: z.string().regex(/^[a-f\d]{24}$/i, "Invalid player ID").optional(),
+  team: z.string().regex(/^[a-f\d]{24}$/i, "Invalid team ID").optional(),
   type: z.enum(statTypes),
-  matchesPlayed: z.number().int().min(0).optional(),
-  goals: z.number().int().min(0).optional(),
-  assists: z.number().int().min(0).optional(),
-  cleanSheets: z.number().int().min(0).optional(),
-  yellowCards: z.number().int().min(0).optional(),
-  redCards: z.number().int().min(0).optional(),
-  minutesPlayed: z.number().int().min(0).optional(),
-  saves: z.number().int().min(0).optional(),
-  winRate: z.number().min(0).max(100).optional(),
-  draws: z.number().int().min(0).optional(),
-  losses: z.number().int().min(0).optional(),
-  goalsFor: z.number().int().min(0).optional(),
-  goalsAgainst: z.number().int().min(0).optional(),
-  points: z.number().int().min(0).optional(),
-  position: z.number().int().positive().optional(),
-  extra: z.record(z.any()).optional(),
+  value: z.number().min(0, "Value cannot be negative"),
+  season: z.string().optional(),
+  competition: z.string().optional(),
 });
 
 exports.updateStatisticSchema = z.object({
-  matchesPlayed: z.number().int().min(0).optional(),
-  goals: z.number().int().min(0).optional(),
-  assists: z.number().int().min(0).optional(),
-  cleanSheets: z.number().int().min(0).optional(),
-  yellowCards: z.number().int().min(0).optional(),
-  redCards: z.number().int().min(0).optional(),
-  minutesPlayed: z.number().int().min(0).optional(),
-  saves: z.number().int().min(0).optional(),
-  winRate: z.number().min(0).max(100).optional(),
-  draws: z.number().int().min(0).optional(),
-  losses: z.number().int().min(0).optional(),
-  goalsFor: z.number().int().min(0).optional(),
-  goalsAgainst: z.number().int().min(0).optional(),
-  points: z.number().int().min(0).optional(),
-  position: z.number().int().positive().optional(),
-  extra: z.record(z.any()).optional(),
+  player: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+  team: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+  type: z.enum(statTypes).optional(),
+  value: z.number().min(0).optional(),
+  season: z.string().optional(),
+  competition: z.string().optional(),
 });
 
 exports.statisticIdParam = z.object({

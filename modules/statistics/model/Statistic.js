@@ -15,81 +15,29 @@ const statisticSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Team",
     },
-    season: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Season",
-    },
-    competition: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Competition",
-    },
     type: {
       type: String,
-      enum: ["PLAYER_SEASON", "TEAM_SEASON", "TEAM_MATCH"],
+      enum: [
+        "GOALS",
+        "ASSISTS",
+        "CLEAN_SHEETS",
+        "YELLOW_CARDS",
+        "RED_CARDS",
+        "APPEARANCES",
+        "MINUTES_PLAYED",
+      ],
       required: [true, "Statistic type is required"],
     },
-    matchesPlayed: {
+    value: {
       type: Number,
-      default: 0,
+      required: [true, "Value is required"],
+      min: [0, "Value cannot be negative"],
     },
-    goals: {
-      type: Number,
-      default: 0,
+    season: {
+      type: String,
     },
-    assists: {
-      type: Number,
-      default: 0,
-    },
-    cleanSheets: {
-      type: Number,
-      default: 0,
-    },
-    yellowCards: {
-      type: Number,
-      default: 0,
-    },
-    redCards: {
-      type: Number,
-      default: 0,
-    },
-    minutesPlayed: {
-      type: Number,
-      default: 0,
-    },
-    saves: {
-      type: Number,
-      default: 0,
-    },
-    winRate: {
-      type: Number,
-      default: 0, // percentage
-    },
-    draws: {
-      type: Number,
-      default: 0,
-    },
-    losses: {
-      type: Number,
-      default: 0,
-    },
-    goalsFor: {
-      type: Number,
-      default: 0,
-    },
-    goalsAgainst: {
-      type: Number,
-      default: 0,
-    },
-    points: {
-      type: Number,
-      default: 0,
-    },
-    position: {
-      type: Number,
-    },
-    extra: {
-      type: mongoose.Schema.Types.Mixed,
-      default: {},
+    competition: {
+      type: String,
     },
   },
   {
@@ -99,8 +47,8 @@ const statisticSchema = new mongoose.Schema(
 
 // Compound index for efficient queries
 statisticSchema.index({ club: 1, type: 1, season: 1 });
-statisticSchema.index({ player: 1, season: 1 });
-statisticSchema.index({ team: 1, season: 1 });
+statisticSchema.index({ player: 1, type: 1 });
+statisticSchema.index({ team: 1, type: 1 });
 
 const Statistic = mongoose.model("Statistic", statisticSchema);
 

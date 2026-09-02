@@ -23,12 +23,6 @@ router.get(
   statisticsController.getStatistic
 );
 
-router.get(
-  "/:id",
-  authorize("SUPER_ADMIN", "CLUB_ADMIN", "TEAM_MANAGER", "COACH"),
-  statisticsController.getStatistic
-);
-
 router.post(
   "/",
   authorize("SUPER_ADMIN", "CLUB_ADMIN", "TEAM_MANAGER", "COACH"),
