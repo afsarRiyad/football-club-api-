@@ -42,8 +42,8 @@ const gallerySchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["MATCH", "TRAINING", "EVENT", "CELEBRATION", "OTHER"],
-      default: "OTHER",
+      enum: ["Match", "Training", "Event", "Team", "Other"],
+      default: "Other",
     },
     coverImage: {
       type: String,

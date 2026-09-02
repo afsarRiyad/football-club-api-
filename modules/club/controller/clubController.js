@@ -41,7 +41,7 @@ exports.getAllClubs = catchAsync(async (req, res, next) => {
     total,
     totalPages: Math.ceil(total / limit),
     currentPage: page,
-    data: { clubs },
+    data: clubs,
   });
 });
 

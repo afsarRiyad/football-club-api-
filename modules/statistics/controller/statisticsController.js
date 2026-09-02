@@ -21,6 +21,7 @@ exports.getAllStatistics = catchAsync(async (req, res, next) => {
   if (req.query.player) filter.player = req.query.player;
   if (req.query.team) filter.team = req.query.team;
   if (req.query.season) filter.season = req.query.season;
+  if (req.query.competition) filter.competition = req.query.competition;
   if (req.query.type) filter.type = req.query.type;
 
   const total = await Statistic.countDocuments(filter);
@@ -38,7 +39,7 @@ exports.getAllStatistics = catchAsync(async (req, res, next) => {
     total,
     totalPages: Math.ceil(total / limit),
     currentPage: page,
-    data: { statistics },
+    data: statistics,
   });
 });
 
@@ -106,7 +107,7 @@ exports.getTopScorers = catchAsync(async (req, res, next) => {
   res.status(200).json({
     success: true,
     results: topScorers.length,
-    data: { topScorers },
+    data: topScorers,
   });
 });
 
@@ -131,6 +132,6 @@ exports.getTeamStandings = catchAsync(async (req, res, next) => {
   res.status(200).json({
     success: true,
     results: standingsWithGD.length,
-    data: { standings: standingsWithGD },
+    data: standingsWithGD,
   });
 });

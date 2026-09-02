@@ -54,7 +54,7 @@ router.post(
 router.post(
   "/avatar",
   protect,
-  upload.single("avatar"),
+  upload.single("file"),
   uploadToCloudinary,
   catchAsync(async (req, res) => {
     throwIf(!req.uploadedFile, "Please upload an image.", 400);
@@ -113,7 +113,7 @@ router.post(
     const club = await Club.findById(req.params.clubId);
     throwIf(!club, "Club not found.", 404);
 
-    club.coverImage = req.uploadedFile.url;
+    club.cover = req.uploadedFile.url;
     await club.save();
 
     res.status(200).json({
@@ -159,7 +159,7 @@ router.post(
     const article = await News.findById(req.params.newsId);
     throwIf(!article, "Article not found.", 404);
 
-    article.coverImage = req.uploadedFile.url;
+    article.cover = req.uploadedFile.url;
     await article.save();
 
     res.status(200).json({

@@ -30,11 +30,17 @@ exports.getAllPlayers = catchAsync(async (req, res, next) => {
     ];
   }
 
+  // Sort: accept -createdAt, lastName, -lastName, number, etc.
+  let sort = "-createdAt";
+  if (req.query.sort) {
+    sort = req.query.sort;
+  }
+
   const total = await Player.countDocuments(filter);
   const players = await Player.find(filter)
     .populate("user", "name email")
     .populate("club", "name slug")
-    .sort("-createdAt")
+    .sort(sort)
     .skip(skip)
     .limit(limit);
 
@@ -44,7 +50,7 @@ exports.getAllPlayers = catchAsync(async (req, res, next) => {
     total,
     totalPages: Math.ceil(total / limit),
     currentPage: page,
-    data: { players },
+    data: players,
   });
 });
 
@@ -105,7 +111,7 @@ exports.getPlayersByClub = catchAsync(async (req, res, next) => {
   res.status(200).json({
     success: true,
     results: players.length,
-    data: { players },
+    data: players,
   });
 });
 

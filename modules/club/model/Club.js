@@ -25,7 +25,7 @@ const clubSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    coverImage: {
+    cover: {
       type: String,
       default: "",
     },

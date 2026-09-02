@@ -37,7 +37,7 @@ exports.getAllMembers = catchAsync(async (req, res, next) => {
     total,
     totalPages: Math.ceil(total / limit),
     currentPage: page,
-    data: { members },
+    data: members,
   });
 });
 

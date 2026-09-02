@@ -32,14 +32,14 @@ const newsSchema = new mongoose.Schema(
       type: String,
       required: [true, "Content is required"],
     },
-    coverImage: {
+    cover: {
       type: String,
       default: "",
     },
     category: {
       type: String,
-      enum: ["GENERAL", "MATCH_REPORT", "TRANSFER", "INJURY", "EVENT", "ANNOUNCEMENT"],
-      default: "GENERAL",
+      enum: ["Transfer", "Match Report", "Interview", "Analysis", "Club News", "General"],
+      default: "General",
     },
     tags: [
       {
@@ -54,7 +54,7 @@ const newsSchema = new mongoose.Schema(
     publishedAt: {
       type: Date,
     },
-    views: {
+    viewCount: {
       type: Number,
       default: 0,
     },

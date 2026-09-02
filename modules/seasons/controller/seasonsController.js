@@ -26,7 +26,7 @@ exports.getAllSeasons = catchAsync(async (req, res, next) => {
   res.status(200).json({
     success: true,
     results: seasons.length,
-    data: { seasons },
+    data: seasons,
   });
 });
 

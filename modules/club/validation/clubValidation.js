@@ -8,7 +8,7 @@ exports.createClubSchema = z.object({
   description: z.string().optional(),
   founded: z.number().int().min(1800).max(2100).optional(),
   logo: z.string().url().optional(),
-  coverImage: z.string().url().optional(),
+  cover: z.string().optional(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
   stadium: z
@@ -46,7 +46,7 @@ exports.updateClubSchema = z.object({
   description: z.string().optional(),
   founded: z.number().int().min(1800).max(2100).optional(),
   logo: z.string().url().optional(),
-  coverImage: z.string().url().optional(),
+  cover: z.string().optional(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
   stadium: z

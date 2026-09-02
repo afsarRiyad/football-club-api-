@@ -42,7 +42,7 @@ exports.getAllTeams = catchAsync(async (req, res, next) => {
     total,
     totalPages: Math.ceil(total / limit),
     currentPage: page,
-    data: { teams },
+    data: teams,
   });
 });
 

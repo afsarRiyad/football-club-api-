@@ -33,7 +33,7 @@ exports.getAllUsers = catchAsync(async (req, res, next) => {
     total,
     totalPages: Math.ceil(total / limit),
     currentPage: page,
-    data: { users },
+    data: users,
   });
 });
 

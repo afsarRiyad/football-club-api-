@@ -11,7 +11,7 @@ const {
 
 // Public routes (read published)
 router.get("/", newsController.getAllNews);
-router.get("/:id", newsController.getNews);
+router.get("/:slug", newsController.getNews);
 
 // Protected routes
 router.use(protect);

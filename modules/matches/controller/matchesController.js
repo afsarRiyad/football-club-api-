@@ -30,12 +30,18 @@ exports.getAllMatches = catchAsync(async (req, res, next) => {
     if (req.query.to) filter.matchDate.$lte = new Date(req.query.to);
   }
 
+  // Sort: accept -matchDate, matchDate, etc.
+  let sort = "matchDate";
+  if (req.query.sort) {
+    sort = req.query.sort;
+  }
+
   const total = await Match.countDocuments(filter);
   const matches = await Match.find(filter)
     .populate("homeTeam", "name slug logo")
     .populate("awayTeam", "name slug logo")
     .populate("competition", "name type")
-    .sort("matchDate")
+    .sort(sort)
     .skip(skip)
     .limit(limit);
 
@@ -45,7 +51,7 @@ exports.getAllMatches = catchAsync(async (req, res, next) => {
     total,
     totalPages: Math.ceil(total / limit),
     currentPage: page,
-    data: { matches },
+    data: matches,
   });
 });
 

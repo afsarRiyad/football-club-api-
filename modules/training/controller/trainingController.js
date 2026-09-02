@@ -43,7 +43,7 @@ exports.getAllTrainings = catchAsync(async (req, res, next) => {
     total,
     totalPages: Math.ceil(total / limit),
     currentPage: page,
-    data: { sessions },
+    data: sessions,
   });
 });
 

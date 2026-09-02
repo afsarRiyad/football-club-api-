@@ -1,6 +1,6 @@
 const { z } = require("zod");
 
-const galleryCategories = ["MATCH", "TRAINING", "EVENT", "CELEBRATION", "OTHER"];
+const galleryCategories = ["Match", "Training", "Event", "Team", "Other"];
 const mediaTypes = ["IMAGE", "VIDEO"];
 
 exports.createGallerySchema = z.object({

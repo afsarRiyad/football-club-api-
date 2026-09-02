@@ -39,11 +39,17 @@ exports.getAllNews = catchAsync(async (req, res, next) => {
     ];
   }
 
+  // Sort: accept -createdAt, -publishedAt, createdAt, etc.
+  let sort = "-publishedAt -createdAt";
+  if (req.query.sort) {
+    sort = req.query.sort;
+  }
+
   const total = await News.countDocuments(filter);
   const articles = await News.find(filter)
     .populate("author", "name photo")
     .populate("club", "name slug")
-    .sort("-publishedAt -createdAt")
+    .sort(sort)
     .skip(skip)
     .limit(limit);
 
@@ -53,12 +59,18 @@ exports.getAllNews = catchAsync(async (req, res, next) => {
     total,
     totalPages: Math.ceil(total / limit),
     currentPage: page,
-    data: { articles },
+    data: articles,
   });
 });
 
 exports.getNews = catchAsync(async (req, res, next) => {
-  const article = await News.findById(req.params.id)
+  // Support both slug and ID lookup
+  const article = await News.findOne({
+    $or: [
+      { slug: req.params.slug },
+      { _id: req.params.slug },
+    ],
+  })
     .populate("author", "name photo")
     .populate("club", "name slug logo");
 
@@ -66,8 +78,8 @@ exports.getNews = catchAsync(async (req, res, next) => {
     return next(new AppError("Article not found.", 404));
   }
 
-  // Increment views
-  article.views += 1;
+  // Increment view count
+  article.viewCount += 1;
   await article.save({ validateBeforeSave: false });
 
   res.status(200).json({

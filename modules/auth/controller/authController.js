@@ -2,6 +2,13 @@ const jwt = require("jsonwebtoken");
 const User = require("../model/User");
 const AppError = require("../../../utils/AppError");
 const catchAsync = require("../../../utils/catchAsync");
+const {
+  generateAccessToken,
+  generateRefreshToken,
+  hashRefreshToken,
+  calculateRefreshTokenExpiry,
+  generateTokenPair,
+} = require("../../../utils/token");
 
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -9,25 +16,41 @@ const signToken = (id) => {
   });
 };
 
-const createSendToken = (user, statusCode, res) => {
-  const token = signToken(user._id);
+const createSendToken = async (user, statusCode, res) => {
+  const tokenPair = generateTokenPair(user._id);
+  
+  // Hash refresh token and store in database
+  const hashedRefreshToken = hashRefreshToken(tokenPair.refreshToken);
+  user.refreshToken = hashedRefreshToken;
+  user.refreshTokenExpires = calculateRefreshTokenExpiry();
+  await user.save({ validateBeforeSave: false });
 
-  const cookieOptions = {
+  const accessTokenCookieOptions = {
     expires: new Date(
-      Date.now() + (process.env.JWT_EXPIRES_IN === "7d" ? 7 * 24 * 60 * 60 * 1000 : 60 * 60 * 1000)
+      Date.now() + (process.env.JWT_EXPIRES_IN === "7d" ? 7 * 24 * 60 * 60 * 1000 : 15 * 60 * 1000)
     ),
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
   };
 
+  const refreshTokenCookieOptions = {
+    expires: calculateRefreshTokenExpiry(),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    path: "/api/auth/refresh-token",
+  };
+
   // Remove password from output
   user.password = undefined;
 
-  res.cookie("jwt", token, cookieOptions);
+  res.cookie("accessToken", tokenPair.accessToken, accessTokenCookieOptions);
+  res.cookie("refreshToken", tokenPair.refreshToken, refreshTokenCookieOptions);
 
   res.status(statusCode).json({
     success: true,
-    token,
+    accessToken: tokenPair.accessToken,
+    refreshToken: tokenPair.refreshToken,
+    expiresIn: tokenPair.accessTokenExpiresIn,
     data: { user },
   });
 };
@@ -41,7 +64,7 @@ exports.register = catchAsync(async (req, res, next) => {
   }
 
   const user = await User.create({ name, email, password });
-  createSendToken(user, 201, res);
+  await createSendToken(user, 201, res);
 });
 
 exports.login = catchAsync(async (req, res, next) => {
@@ -59,17 +82,32 @@ exports.login = catchAsync(async (req, res, next) => {
   user.lastLogin = new Date();
   await user.save({ validateBeforeSave: false });
 
-  createSendToken(user, 200, res);
+  await createSendToken(user, 200, res);
 });
 
-exports.logout = (req, res) => {
-  res.cookie("jwt", "loggedout", {
+exports.logout = catchAsync(async (req, res, next) => {
+  // Clear refresh token from database
+  if (req.user) {
+    await User.findByIdAndUpdate(req.user.id, {
+      refreshToken: undefined,
+      refreshTokenExpires: undefined,
+    });
+  }
+
+  // Clear cookies
+  res.cookie("accessToken", "loggedout", {
     expires: new Date(Date.now() + 10 * 1000),
     httpOnly: true,
   });
+  
+  res.cookie("refreshToken", "loggedout", {
+    expires: new Date(Date.now() + 10 * 1000),
+    httpOnly: true,
+    path: "/api/auth/refresh-token",
+  });
 
   res.status(200).json({ success: true, message: "Logged out successfully." });
-};
+});
 
 exports.getMe = catchAsync(async (req, res, next) => {
   const user = await User.findById(req.user.id);
@@ -121,7 +159,7 @@ exports.updatePassword = catchAsync(async (req, res, next) => {
   await user.save();
 
   // Send new token
-  createSendToken(user, 200, res);
+  await createSendToken(user, 200, res);
 });
 
 exports.forgotPassword = catchAsync(async (req, res, next) => {
@@ -192,5 +230,64 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
   user.passwordResetExpires = undefined;
   await user.save();
 
-  createSendToken(user, 200, res);
+  await createSendToken(user, 200, res);
+});
+
+exports.refreshToken = catchAsync(async (req, res, next) => {
+  const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
+  if (!refreshToken) {
+    return next(new AppError("Refresh token not found. Please login again.", 401));
+  }
+
+  // Hash the refresh token from cookie
+  const hashedRefreshToken = hashRefreshToken(refreshToken);
+
+  // Find user with this refresh token
+  const user = await User.findOne({
+    refreshToken: hashedRefreshToken,
+    refreshTokenExpires: { $gt: Date.now() },
+  }).select("+refreshToken +refreshTokenExpires");
+
+  if (!user) {
+    return next(new AppError("Invalid or expired refresh token. Please login again.", 401));
+  }
+
+  // Generate new token pair
+  const tokenPair = generateTokenPair(user._id);
+  
+  // Update refresh token in database (token rotation)
+  const newHashedRefreshToken = hashRefreshToken(tokenPair.refreshToken);
+  user.refreshToken = newHashedRefreshToken;
+  user.refreshTokenExpires = calculateRefreshTokenExpiry();
+  await user.save({ validateBeforeSave: false });
+
+  const accessTokenCookieOptions = {
+    expires: new Date(
+      Date.now() + (process.env.JWT_EXPIRES_IN === "7d" ? 7 * 24 * 60 * 60 * 1000 : 15 * 60 * 1000)
+    ),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  };
+
+  const refreshTokenCookieOptions = {
+    expires: calculateRefreshTokenExpiry(),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    path: "/api/auth/refresh-token",
+  };
+
+  // Remove password from output
+  user.password = undefined;
+
+  res.cookie("accessToken", tokenPair.accessToken, accessTokenCookieOptions);
+  res.cookie("refreshToken", tokenPair.refreshToken, refreshTokenCookieOptions);
+
+  res.status(200).json({
+    success: true,
+    accessToken: tokenPair.accessToken,
+    refreshToken: tokenPair.refreshToken,
+    expiresIn: tokenPair.accessTokenExpiresIn,
+    data: { user },
+  });
 });
