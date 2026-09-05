@@ -2,7 +2,16 @@ const { z } = require("zod");
 
 const categories = ["SENIOR", "JUNIOR", "WOMEN", "ACADEMY", "RESERVE"];
 
-const formations = ["4-3-3", "4-4-2", "3-5-2", "4-2-3-1", "3-4-3", "5-3-2"];
+const formations = [
+  // 11v11
+  "4-3-3", "4-4-2", "3-5-2", "4-2-3-1", "3-4-3", "5-3-2",
+  // 9v9
+  "3-3-2", "2-4-2", "3-2-3", "4-3-1",
+  // 7v7
+  "2-3-1", "3-2-1", "1-3-2", "2-1-2-1",
+  // 5v5
+  "1-2-1", "1-1-2", "2-1-1", "1-3",
+];
 
 const startingXIEntry = z.object({
   player: z.string().regex(/^[a-f\d]{24}$/i, "Invalid player ID"),
@@ -11,7 +20,7 @@ const startingXIEntry = z.object({
 });
 
 exports.createTeamSchema = z.object({
-  club: z.string().regex(/^[a-f\d]{24}$/i, "Invalid club ID"),
+  club: z.string().regex(/^[a-f\d]{24}$/i, "Invalid club ID").optional(),
   name: z.string().min(1).max(100),
   category: z.enum(categories).optional(),
   division: z.string().optional(),
@@ -32,9 +41,11 @@ exports.updateTeamSchema = z.object({
   description: z.string().optional(),
   manager: z.string().regex(/^[a-f\d]{24}$/i, "Invalid user ID").optional(),
   coach: z.string().regex(/^[a-f\d]{24}$/i, "Invalid user ID").optional(),
-  captain: z.string().regex(/^[a-f\d]{24}$/i, "Invalid player ID").optional(),
+  captain: z.string().regex(/^[a-f\d]{24}$/i, "Invalid player ID").optional().nullable(),
+  viceCaptain: z.string().regex(/^[a-f\d]{24}$/i, "Invalid player ID").optional().nullable(),
   formation: z.enum(formations).optional(),
   startingXI: z.array(startingXIEntry).max(11).optional(),
+  bench: z.array(z.string().regex(/^[a-f\d]{24}$/i, "Invalid player ID")).optional(),
   isActive: z.boolean().optional(),
 });
 

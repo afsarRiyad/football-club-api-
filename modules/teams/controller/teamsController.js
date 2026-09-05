@@ -32,7 +32,10 @@ exports.getAllTeams = catchAsync(async (req, res, next) => {
     .populate("manager", "name email")
     .populate("coach", "name email")
     .populate("players", "firstName lastName number position")
+    .populate("captain", "firstName lastName number")
+    .populate("viceCaptain", "firstName lastName number")
     .populate("startingXI.player", "firstName lastName number position photo")
+    .populate("bench", "firstName lastName number position photo")
     .sort("-createdAt")
     .skip(skip)
     .limit(limit);
@@ -54,7 +57,9 @@ exports.getTeam = catchAsync(async (req, res, next) => {
     .populate("coach", "name email")
     .populate("players", "firstName lastName number position photo status")
     .populate("captain", "firstName lastName number")
-    .populate("startingXI.player", "firstName lastName number position photo status");
+    .populate("viceCaptain", "firstName lastName number")
+    .populate("startingXI.player", "firstName lastName number position photo status")
+    .populate("bench", "firstName lastName number position photo status");
 
   if (!team) {
     return next(new AppError("Team not found.", 404));
@@ -76,7 +81,12 @@ exports.updateTeam = catchAsync(async (req, res, next) => {
   const updatedTeam = await Team.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,
-  });
+  })
+    .populate("club", "name slug logo")
+    .populate("captain", "firstName lastName number")
+    .populate("viceCaptain", "firstName lastName number")
+    .populate("players", "firstName lastName number position photo status")
+    .populate("bench", "firstName lastName number position photo status");
 
   res.status(200).json({
     success: true,

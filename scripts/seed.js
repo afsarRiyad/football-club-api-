@@ -29,17 +29,19 @@ const DROP = process.argv.includes("--drop");
 
 // ─── Sample Data ────────────────────────────────────────────────────
 
+const DEFAULT_PASSWORD = process.env.SEED_PASSWORD || "changeme";
+
 const users = [
-  { name: "Admin Super", email: "admin@fclub.com", password: "password123", role: "SUPER_ADMIN" },
-  { name: "Club Manager", email: "manager@fclub.com", password: "password123", role: "CLUB_ADMIN" },
-  { name: "Team Boss", email: "teammanager@fclub.com", password: "password123", role: "TEAM_MANAGER" },
-  { name: "Coach John", email: "coach@fclub.com", password: "password123", role: "COACH" },
-  { name: "Scorer Tim", email: "scorer@fclub.com", password: "password123", role: "SCORER" },
-  { name: "Alice Player", email: "alice@fclub.com", password: "password123", role: "PLAYER" },
-  { name: "Bob Player", email: "bob@fclub.com", password: "password123", role: "PLAYER" },
-  { name: "Carol Player", email: "carol@fclub.com", password: "password123", role: "PLAYER" },
-  { name: "Dave Player", email: "dave@fclub.com", password: "password123", role: "PLAYER" },
-  { name: "Eve Member", email: "eve@fclub.com", password: "password123", role: "MEMBER" },
+  { name: "Admin Super", email: "admin@fclub.com", password: DEFAULT_PASSWORD, role: "SUPER_ADMIN" },
+  { name: "Club Manager", email: "manager@fclub.com", password: DEFAULT_PASSWORD, role: "CLUB_ADMIN" },
+  { name: "Team Boss", email: "teammanager@fclub.com", password: DEFAULT_PASSWORD, role: "TEAM_MANAGER" },
+  { name: "Coach John", email: "coach@fclub.com", password: DEFAULT_PASSWORD, role: "COACH" },
+  { name: "Scorer Tim", email: "scorer@fclub.com", password: DEFAULT_PASSWORD, role: "SCORER" },
+  { name: "Alice Player", email: "alice@fclub.com", password: DEFAULT_PASSWORD, role: "PLAYER" },
+  { name: "Bob Player", email: "bob@fclub.com", password: DEFAULT_PASSWORD, role: "PLAYER" },
+  { name: "Carol Player", email: "carol@fclub.com", password: DEFAULT_PASSWORD, role: "PLAYER" },
+  { name: "Dave Player", email: "dave@fclub.com", password: DEFAULT_PASSWORD, role: "PLAYER" },
+  { name: "Eve Member", email: "eve@fclub.com", password: DEFAULT_PASSWORD, role: "MEMBER" },
   { name: "Frank Member", email: "frank@fclub.com", password: "password123", role: "MEMBER" },
 ];
 
@@ -504,7 +506,7 @@ async function seed() {
     console.log(`   Training:      ${trainingSessions.length}`);
     console.log(`   Members:       ${members.length}`);
     console.log(`   Statistics:    ${statistics.length}`);
-    console.log("\n🔑 Default login: admin@fclub.com / password123");
+    console.log(`\n🔑 Default login: admin@fclub.com / ${DEFAULT_PASSWORD}`);
 
     process.exit(0);
   } catch (error) {

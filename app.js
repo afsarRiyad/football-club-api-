@@ -27,6 +27,8 @@ const membersRoutes = require("./modules/members/routes/membersRoutes");
 const statisticsRoutes = require("./modules/statistics/routes/statisticsRoutes");
 const uploadRoutes = require("./modules/uploads/routes/uploadRoutes");
 const tournamentRoutes = require("./modules/tournaments/routes/tournamentRoutes");
+const matchFormationRoutes = require("./modules/matches/routes/matchFormationRoutes");
+const matchRequestRoutes = require("./modules/matchRequests/routes/matchRequestRoutes");
 
 const app = express();
 
@@ -104,6 +106,8 @@ app.use("/api/members", membersRoutes);
 app.use("/api/statistics", statisticsRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/tournaments", tournamentRoutes);
+app.use("/api/match-formations", matchFormationRoutes);
+app.use("/api/match-requests", matchRequestRoutes);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────
 app.all("*", (req, res, next) => {

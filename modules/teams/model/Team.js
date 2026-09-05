@@ -27,7 +27,6 @@ const teamSchema = new mongoose.Schema(
     club: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Club",
-      required: [true, "Club is required"],
     },
     name: {
       type: String,
@@ -86,6 +85,12 @@ const teamSchema = new mongoose.Schema(
       // e.g. "4-3-3", "4-4-2", "3-5-2", "4-2-3-1", "3-4-3", "5-3-2"
     },
     startingXI: [startingXIEntrySchema],
+    bench: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Player",
+      },
+    ],
     isActive: {
       type: Boolean,
       default: true,

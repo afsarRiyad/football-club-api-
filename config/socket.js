@@ -3,6 +3,8 @@ const jwt = require("jsonwebtoken");
 
 // Store active match rooms: { matchId: Set<socketId> }
 const matchRooms = new Map();
+// Store active formation rooms: { matchId: Set<socketId> }
+const formationRooms = new Map();
 
 let io;
 
@@ -12,9 +14,19 @@ let io;
  * @returns {Server} Socket.io server instance
  */
 const initSocket = (server) => {
+  const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000,http://localhost:3001")
+    .split(",")
+    .map((o) => o.trim());
+
   io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || "http://localhost:3000",
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
       credentials: true,
     },
     pingTimeout: 60000,
@@ -138,6 +150,37 @@ const initSocket = (server) => {
       });
     });
 
+    // ── Join a formation room (for live lineup sync) ──
+    socket.on("formation:join", (matchId) => {
+      if (!matchId) return;
+
+      socket.join(`formation:${matchId}`);
+      socket.currentFormationMatch = matchId;
+
+      if (!formationRooms.has(matchId)) {
+        formationRooms.set(matchId, new Set());
+      }
+      formationRooms.get(matchId).add(socket.id);
+
+      console.log(`📋 Formation ${matchId}: ${formationRooms.get(matchId).size} viewer(s)`);
+    });
+
+    // ── Leave formation room ──
+    socket.on("formation:leave", (matchId) => {
+      if (!matchId) return;
+
+      socket.leave(`formation:${matchId}`);
+
+      if (formationRooms.has(matchId)) {
+        formationRooms.get(matchId).delete(socket.id);
+        if (formationRooms.get(matchId).size === 0) {
+          formationRooms.delete(matchId);
+        }
+      }
+
+      socket.currentFormationMatch = null;
+    });
+
     // ── Chat in match room (optional) ──
     socket.on("match:chat", (data) => {
       if (!socket.currentMatch) return;
@@ -169,6 +212,14 @@ const initSocket = (server) => {
             "match:viewerCount",
             roomSize
           );
+        }
+      }
+
+      // Clean up formation room tracking
+      if (socket.currentFormationMatch && formationRooms.has(socket.currentFormationMatch)) {
+        formationRooms.get(socket.currentFormationMatch).delete(socket.id);
+        if (formationRooms.get(socket.currentFormationMatch).size === 0) {
+          formationRooms.delete(socket.currentFormationMatch);
         }
       }
 
@@ -213,9 +264,24 @@ const getMatchViewerCount = (matchId) => {
   return matchRooms.has(matchId) ? matchRooms.get(matchId).size : 0;
 };
 
+/**
+ * Emit an event to a specific formation room from controllers.
+ * @param {string} matchId
+ * @param {string} event
+ * @param {object} data
+ */
+const emitToFormation = (matchId, event, data) => {
+  if (!io) return;
+  io.to(`formation:${matchId}`).emit(event, {
+    ...data,
+    timestamp: new Date().toISOString(),
+  });
+};
+
 module.exports = {
   initSocket,
   getIO,
   emitToMatch,
+  emitToFormation,
   getMatchViewerCount,
 };

@@ -77,7 +77,7 @@ exports.updateUserRole = catchAsync(async (req, res, next) => {
 });
 
 exports.updateUser = catchAsync(async (req, res, next) => {
-  const { name, email, photo } = req.body;
+  const { name, email, photo, role, isActive } = req.body;
 
   // Users can update their own profile; admins can update anyone
   const isOwnProfile = req.params.id === req.user.id;
@@ -95,6 +95,9 @@ exports.updateUser = catchAsync(async (req, res, next) => {
   if (name) user.name = name;
   if (email) user.email = email;
   if (photo !== undefined) user.photo = photo;
+  // Admins can update role and isActive
+  if (isAdmin && role) user.role = role;
+  if (isAdmin && isActive !== undefined) user.isActive = isActive;
 
   await user.save({ validateBeforeSave: false });
 
