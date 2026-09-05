@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const competitionsController = require("../controller/competitionsController");
+const tournamentController = require("../../tournaments/controller/tournamentController");
 const { protect } = require("../../../middleware/auth");
 const { authorize } = require("../../../middleware/rbac");
 const validate = require("../../../middleware/validate");
@@ -48,6 +49,30 @@ router.delete(
   "/:id/teams/:teamId",
   authorize("SUPER_ADMIN", "CLUB_ADMIN"),
   competitionsController.removeTeamFromCompetition
+);
+
+// ─── Tournament operations (admin UI calls these on /competitions) ───
+router.get(
+  "/:id/bracket",
+  tournamentController.getBracket
+);
+
+router.post(
+  "/:id/generate-bracket",
+  authorize("SUPER_ADMIN", "CLUB_ADMIN"),
+  tournamentController.generateBracket
+);
+
+router.post(
+  "/:id/matches/:matchId/result",
+  authorize("SUPER_ADMIN", "CLUB_ADMIN", "SCORER"),
+  tournamentController.recordMatchResult
+);
+
+router.patch(
+  "/:id/matches/:matchId",
+  authorize("SUPER_ADMIN", "CLUB_ADMIN", "TEAM_MANAGER"),
+  tournamentController.updateTournamentMatch
 );
 
 module.exports = router;

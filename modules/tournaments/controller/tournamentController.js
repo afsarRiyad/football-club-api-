@@ -602,6 +602,29 @@ exports.recordMatchResult = catchAsync(async (req, res, next) => {
   res.status(200).json({ success: true, data: { tournament } });
 });
 
+exports.updateTournamentMatch = catchAsync(async (req, res, next) => {
+  const tournament = await Tournament.findById(req.params.id);
+
+  if (!tournament) {
+    return next(new AppError("Tournament not found.", 404));
+  }
+
+  const match = tournament.matches.id(req.params.matchId);
+  if (!match) {
+    return next(new AppError("Match not found in this tournament.", 404));
+  }
+
+  // Whitelist updatable fields — never pass raw req.body to the subdoc
+  const allowed = ["matchDate", "venue", "status"];
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) match[key] = req.body[key];
+  }
+
+  await tournament.save();
+
+  res.status(200).json({ success: true, data: { tournament } });
+});
+
 exports.getBracket = catchAsync(async (req, res, next) => {
   const tournament = await Tournament.findById(req.params.id)
     .populate("matches.homeTeam", "name slug logo")

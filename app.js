@@ -32,6 +32,10 @@ const matchRequestRoutes = require("./modules/matchRequests/routes/matchRequestR
 
 const app = express();
 
+// Trust Render's reverse proxy — required for correct req.ip (rate limiting),
+// secure cookies (X-Forwarded-Proto) and client IPs in logs behind the proxy.
+app.set("trust proxy", 1);
+
 // ─── Security Middleware ─────────────────────────────────────────────
 applySecurity(app);
 
