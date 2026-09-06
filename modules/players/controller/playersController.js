@@ -1,4 +1,7 @@
 const Player = require("../model/Player");
+const Team = require("../../teams/model/Team");
+const MatchFormation = require("../../matches/model/MatchFormation");
+const Statistic = require("../../statistics/model/Statistic");
 const AppError = require("../../../utils/AppError");
 const catchAsync = require("../../../utils/catchAsync");
 
@@ -93,6 +96,38 @@ exports.deletePlayer = catchAsync(async (req, res, next) => {
   if (!player) {
     return next(new AppError("Player not found.", 404));
   }
+
+  // Clean up every reference to this player so no lineup/formation endpoint can
+  // ever return a dangling player ref (which previously crashed public pages
+  // that render starting XIs / benches).
+  const id = player._id;
+  await Promise.all([
+    Team.updateMany(
+      {
+        $or: [
+          { players: id },
+          { bench: id },
+          { "startingXI.player": id },
+          { captain: id },
+          { viceCaptain: id },
+        ],
+      },
+      {
+        $pull: { players: id, bench: id, startingXI: { player: id } },
+        $unset: { captain: 1, viceCaptain: 1 },
+      }
+    ),
+    MatchFormation.updateMany(
+      {
+        $or: [{ bench: id }, { "startingXI.player": id }, { captain: id }],
+      },
+      {
+        $pull: { bench: id, startingXI: { player: id } },
+        $unset: { captain: 1 },
+      }
+    ),
+    Statistic.deleteMany({ player: id }),
+  ]);
 
   res.status(200).json({
     success: true,
