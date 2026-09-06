@@ -14,6 +14,12 @@ connectRedis();
 
 const PORT = process.env.PORT || 5000;
 
+// Warn loudly if NODE_ENV is unset — several behaviors (error responses,
+// secure cookies, email transport) depend on it.
+if (!process.env.NODE_ENV) {
+  console.warn("⚠️  NODE_ENV is not set. Set it to 'production' on your hosting provider (Render → Environment).");
+}
+
 const server = app.listen(PORT, () => {
   console.log(`⚽ FClub Backend running on port ${PORT}`);
   console.log(`📌 Environment: ${process.env.NODE_ENV || "development"}`);

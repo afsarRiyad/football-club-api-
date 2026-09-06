@@ -11,7 +11,7 @@ const handleDuplicateFieldsDB = (err) => {
 
 const handleValidationErrorDB = (err) => {
   const messages = Object.values(err.errors).map((el) => el.message);
-  return new Error(`Validation error: ${messages.join(". ")}`);
+  return new AppError(`Validation error: ${messages.join(". ")}`, 400);
 };
 
 const handleJWTError = () => {
@@ -50,19 +50,27 @@ const errorHandler = (err, req, res, next) => {
   err.statusCode = err.statusCode || 500;
   err.status = err.status || "error";
 
-  if (process.env.NODE_ENV === "development") {
+  // Guard: never leave a request hanging. Previously this handler only sent a
+  // response when NODE_ENV was exactly "development" or "production" — on hosts
+  // where NODE_ENV is unset (e.g. Render with `node server.js`), every error
+  // (401, validation, failed login…) silently fell through and the request
+  // hung until the client timed out.
+  const isDev = process.env.NODE_ENV === "development";
+
+  if (isDev) {
     sendErrorDev(err, res);
-  } else if (process.env.NODE_ENV === "production") {
-    let error = { ...err, message: err.message };
-
-    if (err.name === "CastError") error = handleCastErrorDB(err);
-    if (err.code === 11000) error = handleDuplicateFieldsDB(err);
-    if (err.name === "ValidationError") error = handleValidationErrorDB(err);
-    if (err.name === "JsonWebTokenError") error = handleJWTError();
-    if (err.name === "TokenExpiredError") error = handleJWTExpiredError();
-
-    sendErrorProd(error, res);
+    return;
   }
+
+  let error = { ...err, message: err.message };
+
+  if (err.name === "CastError") error = handleCastErrorDB(err);
+  if (err.code === 11000) error = handleDuplicateFieldsDB(err);
+  if (err.name === "ValidationError") error = handleValidationErrorDB(err);
+  if (err.name === "JsonWebTokenError") error = handleJWTError();
+  if (err.name === "TokenExpiredError") error = handleJWTExpiredError();
+
+  sendErrorProd(error, res);
 };
 
 module.exports = errorHandler;

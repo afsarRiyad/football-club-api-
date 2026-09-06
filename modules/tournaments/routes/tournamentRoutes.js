@@ -64,4 +64,11 @@ router.post(
   tournamentController.recordMatchResult
 );
 
+// Schedule / go-live a tournament match (admin "Schedule" & "Go Live" buttons)
+router.patch(
+  "/:id/matches/:matchId",
+  authorize("SUPER_ADMIN", "CLUB_ADMIN", "TEAM_MANAGER"),
+  tournamentController.updateTournamentMatch
+);
+
 module.exports = router;
