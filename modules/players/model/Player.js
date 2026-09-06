@@ -162,6 +162,72 @@ playerSchema.virtual("age").get(function () {
 // Compound index to prevent duplicate player numbers per club
 playerSchema.index({ club: 1, number: 1 }, { unique: true, sparse: true });
 
+/**
+ * Cascade cleanup: whenever a Player is removed through ANY delete path
+ * (findByIdAndDelete, deleteOne, or document.remove()), pull them out of
+ * teams / match formations and delete their statistics. This guarantees a
+ * Statistic can never outlive the player it references, even if a future
+ * controller forgets to clean up — the refs that previously surfaced as
+ * `player: null` and crashed lineup/stat pages simply can't be created.
+ *
+ * Idempotent on purpose: the controller also cleans up, so running both is safe.
+ */
+const cleanupPlayerReferences = async (playerId) => {
+  if (!playerId) return;
+  const Team = require("../../teams/model/Team");
+  const MatchFormation = require("../../matches/model/MatchFormation");
+  const Statistic = require("../../statistics/model/Statistic");
+  await Promise.all([
+    Team.updateMany(
+      {
+        $or: [
+          { players: playerId },
+          { bench: playerId },
+          { "startingXI.player": playerId },
+          { captain: playerId },
+          { viceCaptain: playerId },
+        ],
+      },
+      {
+        $pull: { players: playerId, bench: playerId, startingXI: { player: playerId } },
+        $unset: { captain: 1, viceCaptain: 1 },
+      }
+    ),
+    MatchFormation.updateMany(
+      {
+        $or: [{ bench: playerId }, { "startingXI.player": playerId }, { captain: playerId }],
+      },
+      {
+        $pull: { bench: playerId, startingXI: { player: playerId } },
+        $unset: { captain: 1 },
+      }
+    ),
+    Statistic.deleteMany({ player: playerId }),
+  ]);
+};
+
+const getIdFromFilter = (filter) => {
+  const id = filter && filter._id;
+  if (!id) return null;
+  // Accept a plain ObjectId/string, or a query object like { $in: [...] }.
+  if (typeof id === "object" && !(id instanceof mongoose.Types.ObjectId)) {
+    return null; // complex multi-delete — leave those to explicit cleanup
+  }
+  return id;
+};
+
+playerSchema.pre("findOneAndDelete", async function () {
+  await cleanupPlayerReferences(getIdFromFilter(this.getFilter()));
+});
+
+playerSchema.pre("deleteOne", async function () {
+  await cleanupPlayerReferences(getIdFromFilter(this.getFilter()));
+});
+
+playerSchema.pre("remove", async function () {
+  await cleanupPlayerReferences(this._id);
+});
+
 const Player = mongoose.model("Player", playerSchema);
 
 module.exports = Player;

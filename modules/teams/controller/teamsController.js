@@ -1,4 +1,7 @@
 const Team = require("../model/Team");
+const Match = require("../../matches/model/Match");
+const MatchFormation = require("../../matches/model/MatchFormation");
+const Statistic = require("../../statistics/model/Statistic");
 const AppError = require("../../../utils/AppError");
 const catchAsync = require("../../../utils/catchAsync");
 
@@ -100,6 +103,16 @@ exports.deleteTeam = catchAsync(async (req, res, next) => {
   if (!team) {
     return next(new AppError("Team not found.", 404));
   }
+
+  // Clean up everything that references this team so no endpoint can ever
+  // return a dangling team ref: matches it participates in, its saved match
+  // formations, and any statistics keyed to it.
+  const id = team._id;
+  await Promise.all([
+    Match.deleteMany({ $or: [{ homeTeam: id }, { awayTeam: id }] }),
+    MatchFormation.deleteMany({ team: id }),
+    Statistic.deleteMany({ team: id }),
+  ]);
 
   res.status(200).json({
     success: true,

@@ -122,6 +122,46 @@ teamSchema.virtual("squadSize", {
   count: true,
 });
 
+/**
+ * Cascade cleanup: whenever a Team is removed through ANY delete path
+ * (findByIdAndDelete, deleteOne, or document.remove()), delete the matches it
+ * participates in, its match formations, and any statistics keyed to it. This
+ * guarantees those documents can never reference a team that no longer exists.
+ * Idempotent on purpose — the controller also cleans up, so running both is safe.
+ */
+const cleanupTeamReferences = async (teamId) => {
+  if (!teamId) return;
+  const Match = require("../../matches/model/Match");
+  const MatchFormation = require("../../matches/model/MatchFormation");
+  const Statistic = require("../../statistics/model/Statistic");
+  await Promise.all([
+    Match.deleteMany({ $or: [{ homeTeam: teamId }, { awayTeam: teamId }] }),
+    MatchFormation.deleteMany({ team: teamId }),
+    Statistic.deleteMany({ team: teamId }),
+  ]);
+};
+
+const getIdFromFilter = (filter) => {
+  const id = filter && filter._id;
+  if (!id) return null;
+  if (typeof id === "object" && !(id instanceof mongoose.Types.ObjectId)) {
+    return null; // complex multi-delete — leave those to explicit cleanup
+  }
+  return id;
+};
+
+teamSchema.pre("findOneAndDelete", async function () {
+  await cleanupTeamReferences(getIdFromFilter(this.getFilter()));
+});
+
+teamSchema.pre("deleteOne", async function () {
+  await cleanupTeamReferences(getIdFromFilter(this.getFilter()));
+});
+
+teamSchema.pre("remove", async function () {
+  await cleanupTeamReferences(this._id);
+});
+
 const Team = mongoose.model("Team", teamSchema);
 
 module.exports = Team;
