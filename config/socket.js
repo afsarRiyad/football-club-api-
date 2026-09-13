@@ -14,9 +14,11 @@ let io;
  * @returns {Server} Socket.io server instance
  */
 const initSocket = (server) => {
+  // Keep in sync with the CORS list in app.js (trailing slashes stripped).
   const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000,http://localhost:3001")
     .split(",")
-    .map((o) => o.trim());
+    .map((o) => o.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
 
   io = new Server(server, {
     cors: {

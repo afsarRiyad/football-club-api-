@@ -5,6 +5,15 @@ const catchAsync = require("../../../utils/catchAsync");
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
+/** Canonical knockout order, group stage excluded (it is not a knockout round). */
+const KNOCKOUT_ROUND_ORDER = [
+  "ROUND_OF_32",
+  "ROUND_OF_16",
+  "QUARTER_FINAL",
+  "SEMI_FINAL",
+  "FINAL",
+];
+
 /**
  * Get round order from first to last
  */
@@ -18,45 +27,97 @@ function getRoundOrder(teamCount) {
   return rounds;
 }
 
+/* ─── Bracket entries ───
+   A slot in the draw is either one of the club's Team documents or a name typed
+   in by hand (a guest side that has no Team record). Both carry a name + logo
+   snapshot, which is also what keeps a played match readable after its team is
+   removed from the tournament. */
+function bracketEntries(tournament) {
+  const real = (tournament.teams || [])
+    .filter(Boolean)
+    .map((team) => ({ id: team._id || team, name: team.name || "", logo: team.logo || "" }));
+
+  const manual = (tournament.manualTeams || [])
+    .filter((name) => typeof name === "string" && name.trim())
+    .map((name) => ({ id: null, name: name.trim(), logo: "" }));
+
+  return [...real, ...manual];
+}
+
+/** A slot array includes a null entry when the field is padded with byes. */
+const hasEntry = (entry) => Boolean(entry && (entry.id || entry.name));
+
+/** Spread one entry onto a match under the given side (home/away). */
+function slotFields(entry, side) {
+  const e = hasEntry(entry) ? entry : null;
+  return {
+    [`${side}Team`]: e?.id || null,
+    [`${side}TeamName`]: e?.name || "",
+    [`${side}TeamLogo`]: e?.logo || "",
+  };
+}
+
+/** Read a match slot back as an entry, so a winner can be promoted. */
+function entryOf(match, side) {
+  return {
+    id: match[`${side}Team`] || null,
+    name: match[`${side}TeamName`] || "",
+    logo: match[`${side}TeamLogo`] || "",
+  };
+}
+
+/** A value stored in tournament.groups: a bracket entry, or a bare team id (older documents). */
+function entryFromGroupValue(value) {
+  if (value && typeof value === "object") {
+    return { id: value.id || value._id || null, name: value.name || "", logo: value.logo || "" };
+  }
+  return { id: value || null, name: "", logo: "" };
+}
+
+/** Identity of an entry: the team id when there is one, otherwise its name. */
+const keyOf = (entry) => String((entry && (entry.id || entry.name)) || "");
+
 /**
  * Generate a single-elimination bracket
- * @param {string[]} teamIds - Array of team ObjectIds (must be power of 2)
+ * @param {object[]} entries - Bracket entries, padded to a power of 2
  * @param {Date} startDate - First match date
  * @param {string} venue - Default venue
  * @param {number} matchIntervalDays - Days between rounds
  * @returns {object[]} Array of match objects ready to insert
  */
-function generateBracket(teamIds, startDate, venue, matchIntervalDays = 7) {
-  const teamCount = teamIds.length;
+function generateBracket(entries, startDate, venue, matchIntervalDays = 7) {
+  const teamCount = entries.length;
   const rounds = getRoundOrder(teamCount);
   const totalRounds = rounds.length;
   const matches = [];
 
-  // Shuffle teams for random seeding
-  const shuffled = [...teamIds].sort(() => Math.random() - 0.5);
+  // Shuffle entries for random seeding
+  const shuffled = [...entries].sort(() => Math.random() - 0.5);
 
-  // Round 1: seed teams
-  let currentRoundMatches = [];
+  // Round 1: seed the draw
   for (let i = 0; i < teamCount; i += 2) {
     const matchDate = new Date(startDate);
     matchDate.setDate(matchDate.getDate() + Math.floor(i / 2) * 1); // Stagger by 1 day
+    const home = shuffled[i];
+    const away = shuffled[i + 1];
 
-    currentRoundMatches.push({
+    matches.push({
       round: rounds[0],
       position: i / 2,
-      homeTeam: shuffled[i],
-      awayTeam: shuffled[i + 1] || null,
+      ...slotFields(home, "home"),
+      ...slotFields(away, "away"),
       matchDate,
       venue: venue || "",
-      status: shuffled[i + 1] ? "SCHEDULED" : "BYE",
+      status: hasEntry(home) && hasEntry(away) ? "SCHEDULED" : "BYE",
     });
   }
 
-  matches.push(...currentRoundMatches);
-
-  // Subsequent rounds: empty slots waiting for winners
+  /* Subsequent rounds: empty slots waiting for winners.
+     A round r match count is teamCount / 2^(r+1) — the extra `+ 1` was missing,
+     so round 1 of a 4-team bracket created 2 semi-finals AND a 4-team bracket
+     produced two finals. */
   for (let r = 1; r < totalRounds; r++) {
-    const prevRoundMatchCount = teamCount / Math.pow(2, r);
+    const prevRoundMatchCount = teamCount / Math.pow(2, r + 1);
     for (let i = 0; i < prevRoundMatchCount; i++) {
       const matchDate = new Date(startDate);
       matchDate.setDate(matchDate.getDate() + (r * matchIntervalDays));
@@ -72,6 +133,15 @@ function generateBracket(teamIds, startDate, venue, matchIntervalDays = 7) {
       });
     }
   }
+
+  /* Every match needs its real _id BEFORE the linking below, which reads
+     `nextMatch._id`. These are still plain objects here — Mongoose only assigns
+     an _id when the array is cast onto the document, which happens after this
+     function returns — so without this `nextMatchId` was silently undefined and
+     no winner could ever advance. */
+  matches.forEach((match) => {
+    match._id = new mongoose.Types.ObjectId();
+  });
 
   // Link matches: each round r match feeds into round r+1
   for (let r = 0; r < totalRounds - 1; r++) {
@@ -94,9 +164,9 @@ function generateBracket(teamIds, startDate, venue, matchIntervalDays = 7) {
  * Generate group stage matches (round-robin within each group)
  * Then generate knockout bracket from group qualifiers
  */
-function generateGroupStage(teamIds, startDate, venue, matchIntervalDays = 7, numGroups = null) {
-  const teamCount = teamIds.length;
-  const shuffled = [...teamIds].sort(() => Math.random() - 0.5);
+function generateGroupStage(entries, startDate, venue, matchIntervalDays = 7, numGroups = null) {
+  const teamCount = entries.length;
+  const shuffled = [...entries].sort(() => Math.random() - 0.5);
 
   // Determine number of groups (default: 4 teams per group)
   if (!numGroups) {
@@ -122,7 +192,7 @@ function generateGroupStage(teamIds, startDate, venue, matchIntervalDays = 7, nu
 
   // For each group, generate round-robin matches
   for (const [groupLabel, groupTeams] of Object.entries(groups)) {
-    // Round-robin: each team plays every other team once
+    // Round-robin: each side plays every other side once
     for (let i = 0; i < groupTeams.length; i++) {
       for (let j = i + 1; j < groupTeams.length; j++) {
         const matchDate = new Date(startDate);
@@ -134,8 +204,8 @@ function generateGroupStage(teamIds, startDate, venue, matchIntervalDays = 7, nu
         matches.push({
           round: "GROUP_STAGE",
           position: positionCounter++,
-          homeTeam: groupTeams[i],
-          awayTeam: groupTeams[j],
+          ...slotFields(groupTeams[i], "home"),
+          ...slotFields(groupTeams[j], "away"),
           matchDate,
           venue: venue || "",
           status: "SCHEDULED",
@@ -180,9 +250,9 @@ function generateGroupStage(teamIds, startDate, venue, matchIntervalDays = 7, nu
     });
   }
 
-  // Subsequent knockout rounds
+  // Subsequent knockout rounds — same 2^(r+1) count as the single-knockout path.
   for (let r = 1; r < knockoutRounds.length; r++) {
-    const prevCount = knockoutTeams / Math.pow(2, r);
+    const prevCount = knockoutTeams / Math.pow(2, r + 1);
     for (let i = 0; i < prevCount; i++) {
       const matchDate = new Date(knockoutStartDate);
       matchDate.setDate(matchDate.getDate() + r * matchIntervalDays);
@@ -197,6 +267,11 @@ function generateGroupStage(teamIds, startDate, venue, matchIntervalDays = 7, nu
       });
     }
   }
+
+  /* Real _ids before linking — see the note in generateBracket(). */
+  knockoutMatches.forEach((match) => {
+    match._id = new mongoose.Types.ObjectId();
+  });
 
   // Link knockout matches
   for (let r = 0; r < knockoutRounds.length - 1; r++) {
@@ -223,23 +298,22 @@ async function advanceWinner(tournament, completedMatch) {
   const nextMatch = tournament.matches.id(completedMatch.nextMatchId);
   if (!nextMatch) return;
 
-  const winnerTeam =
-    completedMatch.winner === "HOME"
-      ? completedMatch.homeTeam
-      : completedMatch.winner === "AWAY"
-      ? completedMatch.awayTeam
-      : null;
+  const side =
+    completedMatch.winner === "HOME" ? "home" : completedMatch.winner === "AWAY" ? "away" : null;
+  if (!side) return;
 
-  if (!winnerTeam) return;
+  /* Promote the whole entry — id plus the name/logo snapshot. Passing only the
+     ObjectId left a typed-in side (no Team document) or a team removed from the
+     tournament with nothing to show in the next round. */
+  const winnerEntry = entryOf(completedMatch, side);
+  if (!hasEntry(winnerEntry)) return;
 
-  if (completedMatch.nextMatchPosition === 0) {
-    nextMatch.homeTeam = winnerTeam;
-  } else {
-    nextMatch.awayTeam = winnerTeam;
-  }
+  Object.assign(nextMatch, slotFields(winnerEntry, completedMatch.nextMatchPosition === 0 ? "home" : "away"));
 
-  // If both teams are now set, schedule the match
-  if (nextMatch.homeTeam && nextMatch.awayTeam) {
+  // If both sides are now known, the match can be played.
+  const bothReady =
+    (nextMatch.homeTeam || nextMatch.homeTeamName) && (nextMatch.awayTeam || nextMatch.awayTeamName);
+  if (bothReady) {
     nextMatch.status = "SCHEDULED";
   }
 }
@@ -342,13 +416,17 @@ exports.deleteTournament = catchAsync(async (req, res, next) => {
 // ─── Bracket Operations ─────────────────────────────────────────────
 
 exports.generateBracket = catchAsync(async (req, res, next) => {
-  const tournament = await Tournament.findById(req.params.id);
+  /* Teams are populated because the bracket snapshots their name and logo. */
+  const tournament = await Tournament.findById(req.params.id).populate("teams", "name logo");
 
   if (!tournament) {
     return next(new AppError("Tournament not found.", 404));
   }
 
-  if (tournament.teams.length < 2) {
+  /* Real teams + hand-typed sides, in one list of entries. */
+  const entries = bracketEntries(tournament);
+
+  if (entries.length < 2) {
     return next(new AppError("At least 2 teams are required to generate a bracket.", 400));
   }
 
@@ -360,9 +438,9 @@ exports.generateBracket = catchAsync(async (req, res, next) => {
 
   // Check if format is GROUP_AND_KNOCKOUT
   if (tournament.format === "GROUP_AND_KNOCKOUT" || req.body.format === "GROUP_AND_KNOCKOUT") {
-    const numGroups = req.body.numGroups || Math.ceil(tournament.teams.length / 4);
+    const numGroups = req.body.numGroups || Math.ceil(entries.length / 4);
     const result = generateGroupStage(
-      tournament.teams,
+      entries,
       startDate,
       venue,
       matchIntervalDays,
@@ -372,29 +450,28 @@ exports.generateBracket = catchAsync(async (req, res, next) => {
     tournament.groups = result.groups;
     tournament.currentRound = "GROUP_STAGE";
   } else {
-    // Single knockout: must be power of 2 (or pad to next power of 2)
-    let teamCount = tournament.teams.length;
+    /* Single knockout: pad with byes to the next power of two. The padding goes
+       on a COPY — the old code pushed nulls straight into tournament.teams, which
+       left the roster with empty entries pinned to the document. */
+    let teamCount = entries.length;
     if (teamCount & (teamCount - 1)) {
       let nextPow = 1;
       while (nextPow < teamCount) nextPow *= 2;
-      while (tournament.teams.length < nextPow) {
-        tournament.teams.push(null);
-      }
       teamCount = nextPow;
     }
+    while (entries.length < teamCount) entries.push(null);
+
     tournament.teamCount = teamCount;
 
-    tournament.matches = generateBracket(
-      tournament.teams,
-      startDate,
-      venue,
-      matchIntervalDays
-    );
+    tournament.matches = generateBracket(entries, startDate, venue, matchIntervalDays);
   }
 
-  // Handle BYE matches: auto-advance teams with no opponent
+  // Handle BYE matches: auto-advance a side with no opponent
   for (const match of tournament.matches) {
-    if (match.awayTeam === null && match.homeTeam !== null) {
+    const home = match.homeTeam || match.homeTeamName;
+    const away = match.awayTeam || match.awayTeamName;
+
+    if (home && !away) {
       match.status = "BYE";
       match.winner = "HOME";
 
@@ -425,12 +502,28 @@ exports.addTeam = catchAsync(async (req, res, next) => {
     return next(new AppError("Cannot add teams after tournament has started.", 400));
   }
 
-  const { teamId } = req.body;
-  if (tournament.teams.includes(teamId)) {
-    return next(new AppError("Team is already in this tournament.", 400));
+  /* Either a real team (teamId) or a name typed in by hand (name) — a guest
+     side that only exists for this tournament, exactly like a one-off opponent
+     on a match. A typed name never creates a Team document. */
+  const { teamId, name } = req.body;
+
+  if (!teamId && !(typeof name === "string" && name.trim())) {
+    return next(new AppError("Provide a team, or a name to add as a guest side.", 400));
   }
 
-  tournament.teams.push(teamId);
+  if (teamId) {
+    if (tournament.teams.some((t) => t && t.toString() === teamId.toString())) {
+      return next(new AppError("Team is already in this tournament.", 400));
+    }
+    tournament.teams.push(teamId);
+  } else {
+    const trimmed = name.trim();
+    if (tournament.manualTeams.some((n) => n.toLowerCase() === trimmed.toLowerCase())) {
+      return next(new AppError("A side with that name is already in this tournament.", 400));
+    }
+    tournament.manualTeams.push(trimmed);
+  }
+
   await tournament.save();
 
   res.status(200).json({ success: true, data: { tournament } });
@@ -443,8 +536,42 @@ exports.removeTeam = catchAsync(async (req, res, next) => {
     return next(new AppError("Tournament not found.", 404));
   }
 
-  if (tournament.status !== "DRAFT" && tournament.status !== "REGISTRATION") {
-    return next(new AppError("Cannot remove teams after tournament has started.", 400));
+  /* A hand-typed side is removed by its name (the route param is the identifier
+     the admin has for both kinds of entry). */
+  const manualIndex = (tournament.manualTeams || []).findIndex((n) => n === req.params.teamId);
+  if (manualIndex !== -1) {
+    tournament.manualTeams.splice(manualIndex, 1);
+    await tournament.save();
+    return res.status(200).json({ success: true, data: { tournament } });
+  }
+
+  const removingTeam = tournament.teams.find((t) => t && t.toString() === req.params.teamId);
+  if (!removingTeam) {
+    return next(new AppError("That team is not in this tournament.", 404));
+  }
+
+  /* Removing a side is allowed while the tournament is being set up, or once
+     every match it played is finished.
+
+     It is deliberately NOT allowed while one of its matches is still to be
+     played: the fixture list would end up with a slot nobody can fill. And it
+     never erases history — each match carries its own name/logo snapshot, so a
+     result keeps showing the name it was played under even after the team is
+     gone from the roster. */
+  const settled = ["DRAFT", "REGISTRATION"].includes(tournament.status);
+  const hasUnplayed = tournament.matches.some(
+    (m) =>
+      (m.homeTeam?.toString() === req.params.teamId || m.awayTeam?.toString() === req.params.teamId) &&
+      !["COMPLETED", "BYE"].includes(m.status)
+  );
+
+  if (!settled && hasUnplayed) {
+    return next(
+      new AppError(
+        "This team still has matches to play in this tournament. Finish or cancel them before removing it.",
+        400
+      )
+    );
   }
 
   tournament.teams = tournament.teams.filter(
@@ -471,6 +598,22 @@ exports.recordMatchResult = catchAsync(async (req, res, next) => {
   match.homeScore = homeScore;
   match.awayScore = awayScore;
   match.status = "COMPLETED";
+
+  /* Goal scorers and assists are entered in the same dialog as the score, so the
+     whole result arrives in one request. Omitting `events` leaves what is stored
+     alone; sending an empty array clears it. */
+  if (Array.isArray(req.body.events)) {
+    match.events = req.body.events.map((event) => ({
+      type: event.type,
+      minute: event.minute,
+      side: event.side === "AWAY" ? "AWAY" : "HOME",
+      player: event.player || undefined,
+      assist: event.assist || undefined,
+      playerName: (event.playerName || "").trim(),
+      assistName: (event.assistName || "").trim(),
+      description: (event.description || "").trim(),
+    }));
+  }
 
   // Determine winner (no draws in knockout)
   if (homeScore > awayScore) {
@@ -512,13 +655,20 @@ exports.recordMatchResult = catchAsync(async (req, res, next) => {
     const allGroupDone = groupMatches.every(m => m.status === "COMPLETED");
 
     if (allGroupDone && tournament.groups) {
-      // Calculate group standings and pick qualifiers
+      /* Calculate group standings and pick qualifiers.
+
+         A row is keyed by the team id when the side is a real Team document and
+         by its name otherwise, so a group containing hand-typed sides still
+         ranks — and a team removed from the roster keeps its row, because the
+         key falls back to the snapshot name on the match. */
       const standings = {};
-      for (const [label, teamIds] of Object.entries(tournament.groups)) {
+      for (const [label, groupValues] of Object.entries(tournament.groups)) {
         standings[label] = {};
-        for (const tid of teamIds) {
-          const key = tid.toString();
-          standings[label][key] = { team: tid, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 };
+        for (const value of groupValues || []) {
+          const entry = entryFromGroupValue(value);
+          const key = keyOf(entry);
+          if (!key) continue;
+          standings[label][key] = { entry, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 };
         }
       }
 
@@ -526,8 +676,8 @@ exports.recordMatchResult = catchAsync(async (req, res, next) => {
         if (gm.status !== "COMPLETED") continue;
         const group = gm.group;
         if (!group || !standings[group]) continue;
-        const hid = gm.homeTeam?.toString();
-        const aid = gm.awayTeam?.toString();
+        const hid = keyOf(entryOf(gm, "home"));
+        const aid = keyOf(entryOf(gm, "away"));
         if (!hid || !aid || !standings[group][hid] || !standings[group][aid]) continue;
 
         const hs = gm.homeScore ?? 0;
@@ -555,29 +705,46 @@ exports.recordMatchResult = catchAsync(async (req, res, next) => {
         }
       }
 
-      // Pick top 2 from each group
-      const qualifiers = [];
-      for (const [label, groupStandings] of Object.entries(standings)) {
-        const sorted = Object.values(groupStandings)
+      /* Top 2 of each group, kept in separate lists so a group winner is drawn
+         against another group's runner-up — two teams that already met in the
+         group cannot be paired again in the first knockout round. */
+      const winners = [];
+      const runnersUp = [];
+      for (const label of Object.keys(standings).sort()) {
+        const sorted = Object.values(standings[label])
           .map(s => ({ ...s, gd: s.gf - s.ga }))
           .sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf);
-        qualifiers.push(sorted[0]?.team);
-        if (sorted[1]) qualifiers.push(sorted[1]?.team);
+        if (sorted[0]?.entry) winners.push(sorted[0].entry);
+        if (sorted[1]?.entry) runnersUp.push(sorted[1].entry);
       }
+      const pairs = winners.map((winner, i) => [
+        winner,
+        runnersUp.length > 0 ? runnersUp[(i + 1) % runnersUp.length] : null,
+      ]);
 
-      // Fill knockout bracket first round with qualifiers
+      /* Only the FIRST knockout round is seeded here. Taking every PENDING
+         knockout match and sorting by position mixed the rounds together — a
+         semi-final, the final and quarter-final #1 all share position 0 — so
+         qualifiers used to be written into the wrong slots. */
       const knockoutMatches = tournament.matches.filter(m => m.round !== "GROUP_STAGE");
+      const roundNames = [...new Set(knockoutMatches.map(m => m.round))].sort(
+        (a, b) => KNOCKOUT_ROUND_ORDER.indexOf(a) - KNOCKOUT_ROUND_ORDER.indexOf(b)
+      );
+      const firstRoundName = roundNames[0];
       const firstKnockoutRound = knockoutMatches
-        .filter(m => m.status === "PENDING")
+        .filter(m => m.round === firstRoundName)
         .sort((a, b) => a.position - b.position);
 
-      for (let i = 0; i < firstKnockoutRound.length && i * 2 < qualifiers.length; i++) {
-        firstKnockoutRound[i].homeTeam = qualifiers[i * 2];
-        firstKnockoutRound[i].awayTeam = qualifiers[i * 2 + 1];
-        firstKnockoutRound[i].status = "SCHEDULED";
-      }
+      pairs.slice(0, firstKnockoutRound.length).forEach(([home, away], i) => {
+        Object.assign(
+          firstKnockoutRound[i],
+          slotFields(home, "home"),
+          slotFields(away, "away")
+        );
+        firstKnockoutRound[i].status = hasEntry(home) && hasEntry(away) ? "SCHEDULED" : "PENDING";
+      });
 
-      tournament.currentRound = firstKnockoutRound[0]?.round || "QUARTER_FINAL";
+      tournament.currentRound = firstRoundName || "QUARTER_FINAL";
     }
   }
 
@@ -585,8 +752,9 @@ exports.recordMatchResult = catchAsync(async (req, res, next) => {
   const finalMatch = tournament.matches.find((m) => m.round === "FINAL");
   if (finalMatch && finalMatch.status === "COMPLETED") {
     tournament.status = "COMPLETED";
-    tournament.champion =
-      finalMatch.winner === "HOME" ? finalMatch.homeTeam : finalMatch.awayTeam;
+    const champion = entryOf(finalMatch, finalMatch.winner === "AWAY" ? "away" : "home");
+    tournament.champion = champion.id || undefined;
+    tournament.championName = champion.name || "";
   }
 
   // Update current round
@@ -629,6 +797,12 @@ exports.getBracket = catchAsync(async (req, res, next) => {
   const tournament = await Tournament.findById(req.params.id)
     .populate("matches.homeTeam", "name slug logo")
     .populate("matches.awayTeam", "name slug logo")
+    /* `teams` and `club` are populated so this payload is a SUPERSET of
+       GET /tournaments/:id. The admin bracket page fetches both and keeps the
+       last one to land; when this response omitted `teams`, it wiped the roster
+       off the tournament and the page threw on `tournament.teams.length`.
+       Anything a sibling endpoint returns must be included here. */
+    .populate("teams", "name slug logo")
     .populate("champion", "name slug logo");
 
   if (!tournament) {
@@ -666,11 +840,20 @@ exports.getBracket = catchAsync(async (req, res, next) => {
       tournament: {
         _id: tournament._id,
         name: tournament.name,
+        slug: tournament.slug,
         format: tournament.format,
         teamCount: tournament.teamCount,
         status: tournament.status,
         currentRound: tournament.currentRound,
         champion: tournament.champion,
+        teams: tournament.teams || [],
+        manualTeams: tournament.manualTeams || [],
+        championName: tournament.championName || "",
+        startDate: tournament.startDate,
+        endDate: tournament.endDate,
+        venue: tournament.venue,
+        description: tournament.description,
+        matchIntervalDays: tournament.matchIntervalDays,
         groups: tournament.groups || {},
       },
       bracket,

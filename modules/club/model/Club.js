@@ -55,6 +55,10 @@ const clubSchema = new mongoose.Schema(
     },
     location: {
       city: { type: String, default: "" },
+      // Street / area line (e.g. "Bhuiyyarhat Chowrasta"). The admin club form
+      // writes location.address, so without this field the value was silently
+      // dropped by strict schema mode and never reached the public site.
+      address: { type: String, default: "" },
       country: { type: String, default: "" },
     },
     isActive: {

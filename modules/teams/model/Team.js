@@ -124,21 +124,41 @@ teamSchema.virtual("squadSize", {
 
 /**
  * Cascade cleanup: whenever a Team is removed through ANY delete path
- * (findByIdAndDelete, deleteOne, or document.remove()), delete the matches it
- * participates in, its match formations, and any statistics keyed to it. This
- * guarantees those documents can never reference a team that no longer exists.
- * Idempotent on purpose — the controller also cleans up, so running both is safe.
+ * (findByIdAndDelete, deleteOne, or document.remove()).
+ *
+ * Results are history. This used to run `Match.deleteMany(...)` for every fixture
+ * the team played, so cleaning up a retired or mistyped team silently destroyed
+ * scores, scorers and whole seasons of results. Instead the team's name and logo
+ * are now frozen onto those fixtures, and the fixtures stay: their Team reference
+ * goes dangling, which every read path already tolerates via the snapshot.
+ *
+ * What genuinely belongs to the team — its saved match formations and its own
+ * statistics rows — still goes with it. Idempotent, and the controller may also
+ * clean up, so running both is safe.
+ *
+ * @param {{id: any, name?: string, logo?: string}} team - identity to freeze onto matches
  */
-const cleanupTeamReferences = async (teamId) => {
-  if (!teamId) return;
+const cleanupTeamReferences = async ({ id, name, logo }) => {
+  if (!id) return;
   const Match = require("../../matches/model/Match");
   const MatchFormation = require("../../matches/model/MatchFormation");
   const Statistic = require("../../statistics/model/Statistic");
-  await Promise.all([
-    Match.deleteMany({ $or: [{ homeTeam: teamId }, { awayTeam: teamId }] }),
-    MatchFormation.deleteMany({ team: teamId }),
-    Statistic.deleteMany({ team: teamId }),
-  ]);
+
+  const work = [
+    MatchFormation.deleteMany({ team: id }),
+    Statistic.deleteMany({ team: id }),
+  ];
+
+  /* Only freeze when the name is actually known — an unknown name must not
+     overwrite a snapshot that is already stored on the match. */
+  if (name !== undefined) {
+    work.push(
+      Match.updateMany({ homeTeam: id }, { homeTeamName: name || "", homeTeamLogo: logo || "" }),
+      Match.updateMany({ awayTeam: id }, { awayTeamName: name || "", awayTeamLogo: logo || "" })
+    );
+  }
+
+  await Promise.all(work);
 };
 
 const getIdFromFilter = (filter) => {
@@ -150,16 +170,31 @@ const getIdFromFilter = (filter) => {
   return id;
 };
 
+/* The team's own name/logo are needed to freeze them onto its fixtures, so read
+   them before the delete runs. `this.model` is the Team model on a query hook. */
+const loadIdentity = async (model, id) => {
+  if (!id) return null;
+  try {
+    return await model.findById(id).select("name logo").lean();
+  } catch {
+    return null;
+  }
+};
+
 teamSchema.pre("findOneAndDelete", async function () {
-  await cleanupTeamReferences(getIdFromFilter(this.getFilter()));
+  const id = getIdFromFilter(this.getFilter());
+  const team = await loadIdentity(this.model, id);
+  await cleanupTeamReferences({ id, name: team?.name, logo: team?.logo });
 });
 
 teamSchema.pre("deleteOne", async function () {
-  await cleanupTeamReferences(getIdFromFilter(this.getFilter()));
+  const id = getIdFromFilter(this.getFilter());
+  const team = await loadIdentity(this.model, id);
+  await cleanupTeamReferences({ id, name: team?.name, logo: team?.logo });
 });
 
 teamSchema.pre("remove", async function () {
-  await cleanupTeamReferences(this._id);
+  await cleanupTeamReferences({ id: this._id, name: this.name, logo: this.logo });
 });
 
 const Team = mongoose.model("Team", teamSchema);

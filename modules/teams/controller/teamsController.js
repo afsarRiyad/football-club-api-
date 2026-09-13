@@ -1,7 +1,5 @@
 const Team = require("../model/Team");
-const Match = require("../../matches/model/Match");
-const MatchFormation = require("../../matches/model/MatchFormation");
-const Statistic = require("../../statistics/model/Statistic");
+const Tournament = require("../../tournaments/model/Tournament");
 const AppError = require("../../../utils/AppError");
 const catchAsync = require("../../../utils/catchAsync");
 
@@ -89,6 +87,7 @@ exports.updateTeam = catchAsync(async (req, res, next) => {
     .populate("captain", "firstName lastName number")
     .populate("viceCaptain", "firstName lastName number")
     .populate("players", "firstName lastName number position photo status")
+    .populate("startingXI.player", "firstName lastName number position photo")
     .populate("bench", "firstName lastName number position photo status");
 
   res.status(200).json({
@@ -98,25 +97,29 @@ exports.updateTeam = catchAsync(async (req, res, next) => {
 });
 
 exports.deleteTeam = catchAsync(async (req, res, next) => {
-  const team = await Team.findByIdAndDelete(req.params.id);
+  const team = await Team.findById(req.params.id);
 
   if (!team) {
     return next(new AppError("Team not found.", 404));
   }
 
-  // Clean up everything that references this team so no endpoint can ever
-  // return a dangling team ref: matches it participates in, its saved match
-  // formations, and any statistics keyed to it.
   const id = team._id;
-  await Promise.all([
-    Match.deleteMany({ $or: [{ homeTeam: id }, { awayTeam: id }] }),
-    MatchFormation.deleteMany({ team: id }),
-    Statistic.deleteMany({ team: id }),
-  ]);
+
+  /* Deleting a team must not delete what it did on the pitch. The Team model's
+     delete hooks freeze this team's name and logo onto the fixtures it played and
+     keep those fixtures (they used to be deleted outright), and drop its saved
+     formations and its own statistics rows. The Team model's pre-delete hooks
+     handle all of that, so it applies to every delete path, not just this one. */
+  await Team.findByIdAndDelete(id);
+
+  /* A tournament keeps its bracket and every name recorded in it; only the roster
+     entry pointing at the deleted team is pulled, so it cannot be offered for
+     selection again. */
+  await Tournament.updateMany({ teams: id }, { $pull: { teams: id } });
 
   res.status(200).json({
     success: true,
-    message: "Team deleted successfully.",
+    message: "Team deleted successfully. The matches this team played have been kept.",
   });
 });
 

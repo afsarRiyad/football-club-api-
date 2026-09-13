@@ -23,6 +23,11 @@ exports.getAllNews = catchAsync(async (req, res, next) => {
   if (req.query.club) filter.club = req.query.club;
   if (req.query.category) filter.category = req.query.category;
   if (req.query.tag) filter.tags = req.query.tag;
+  /* Lets a caller ask for the hero story directly, so a featured article older
+     than the newest few still renders in the big slot. */
+  if (req.query.isFeatured !== undefined) {
+    filter.isFeatured = req.query.isFeatured === "true";
+  }
 
   // Non-admins only see published articles
   const isAdmin = req.user && ["SUPER_ADMIN", "CLUB_ADMIN"].includes(req.user.role);
@@ -131,6 +136,46 @@ exports.publishNews = catchAsync(async (req, res, next) => {
   }
 
   article.isPublished = true;
+  await article.save();
+
+  res.status(200).json({
+    success: true,
+    data: { article },
+  });
+});
+
+/*  Featured = the story in the big hero slot. Only one at a time, so this clears
+    the flag everywhere else in the same operation: two featured articles would
+    make both the news page and the homepage pick arbitrarily. */
+exports.featureNews = catchAsync(async (req, res, next) => {
+  const article = await News.findById(req.params.id);
+
+  if (!article) {
+    return next(new AppError("Article not found.", 404));
+  }
+
+  await News.updateMany(
+    { _id: { $ne: article._id } },
+    { $set: { isFeatured: false } }
+  );
+
+  article.isFeatured = true;
+  await article.save();
+
+  res.status(200).json({
+    success: true,
+    data: { article },
+  });
+});
+
+exports.unfeatureNews = catchAsync(async (req, res, next) => {
+  const article = await News.findById(req.params.id);
+
+  if (!article) {
+    return next(new AppError("Article not found.", 404));
+  }
+
+  article.isFeatured = false;
   await article.save();
 
   res.status(200).json({

@@ -5,6 +5,7 @@ const app = require("./app");
 const connectDB = require("./config/db");
 const { initSocket } = require("./config/socket");
 const { connectRedis } = require("./utils/cache");
+const { runStartupOrphanCleanup } = require("./config/startup-cleanup");
 
 // Connect to MongoDB
 connectDB();
@@ -25,6 +26,14 @@ const server = app.listen(PORT, () => {
   console.log(`📌 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`📚 API Docs: http://localhost:${PORT}/api-docs`);
 });
+
+// One-time data-integrity sweep: removes statistic rows that reference deleted
+// players (legacy orphans). Non-blocking, idempotent, can never crash startup.
+setTimeout(() => {
+  runStartupOrphanCleanup().catch((err) => {
+    console.warn("🧹 Startup orphan-stat cleanup failed:", err.message);
+  });
+}, 1500);
 
 // Initialize Socket.io
 initSocket(server);

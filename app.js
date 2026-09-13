@@ -8,6 +8,7 @@ const ensureDB = require("./middleware/dbCheck");
 // Rate limiting removed from global — only applied to auth routes
 const { applySecurity } = require("./middleware/security");
 const { auditMiddleware } = require("./middleware/auditLog");
+const revalidateSite = require("./middleware/revalidateSite");
 const { setupSwagger } = require("./config/swagger");
 
 // Route imports
@@ -41,9 +42,12 @@ applySecurity(app);
 
 // ─── Global Middleware ───────────────────────────────────────────────
 // CORS — support comma-separated list of origins
+// Trailing slashes are stripped so a value pasted as "https://site.com/" still matches
+// the Origin header the browser sends (which never has one).
 const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000,http://localhost:3001")
   .split(",")
-  .map((o) => o.trim());
+  .map((o) => o.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
 
 app.use(
   cors({
@@ -75,6 +79,11 @@ if (process.env.NODE_ENV === "development") {
 
 // Audit logging middleware
 app.use("/api", auditMiddleware);
+
+// After any successful write, tell the public site to regenerate the pages that
+// are cached from this data. No-ops when PUBLIC_SITE_URL / REVALIDATE_SECRET are
+// unset, so a write never depends on it.
+app.use("/api", revalidateSite);
 
 // Swagger API documentation
 setupSwagger(app);

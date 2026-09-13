@@ -28,6 +28,10 @@ const errorHandler = require("../middleware/errorHandler");
 // First-run downloads the MongoDB binary; allow plenty of time.
 jest.setTimeout(120000);
 
+/* Closing note: the two team-deletion cases here used to assert that the delete
+   cascade removed matches. That behaviour was the bug (see
+   tests/teams.delete.keepsResults.integration.test.js), so they now assert the
+   opposite: fixtures stay, the team's own formations/statistics go. */
 describe("Player/Statistic referential integrity (integration)", () => {
   let mongo;
   let app;
@@ -187,7 +191,10 @@ describe("Player/Statistic referential integrity (integration)", () => {
     expect(await Statistic.countDocuments({ team: team._id })).toBe(1);
   });
 
-  it("deleting a team removes its matches, formations, and statistics (via API)", async () => {
+  /* Deleting a team used to cascade into the matches it played, which destroyed
+     scores and whole seasons of results. Its own data still goes, but the fixtures
+     stay and keep the team's name so the results remain readable. */
+  it("deleting a team keeps its matches but removes its formations and statistics (via API)", async () => {
     const team = await Team.create({ club: clubA._id, name: "First XI" });
     const opponent = await Team.create({ club: clubB._id, name: "Rivals" });
     const match = await Match.create({
@@ -195,6 +202,8 @@ describe("Player/Statistic referential integrity (integration)", () => {
       homeTeam: team._id,
       awayTeam: opponent._id,
       matchDate: new Date(),
+      status: "FT",
+      score: { home: 2, away: 0 },
     });
     await MatchFormation.create({
       club: clubA._id,
@@ -211,13 +220,18 @@ describe("Player/Statistic referential integrity (integration)", () => {
     const res = await request(app).delete(`/api/teams/${team._id}`);
     expect(res.status).toBe(200);
 
-    expect(await Match.countDocuments({ homeTeam: team._id })).toBe(0);
-    expect(await Match.countDocuments({ awayTeam: team._id })).toBe(0);
+    // The played result survives the team being removed from the roster.
+    const kept = await Match.findById(match._id);
+    expect(kept).toBeTruthy();
+    expect(kept.score).toEqual({ home: 2, away: 0 });
+    expect(kept.homeTeamName).toBe("First XI");
+
+    // The team's own records do not.
     expect(await MatchFormation.countDocuments({ team: team._id })).toBe(0);
     expect(await Statistic.countDocuments({ team: team._id })).toBe(0);
   });
 
-  it("model middleware cascades on a direct Team.findByIdAndDelete (no controller)", async () => {
+  it("model middleware keeps matches on a direct Team.findByIdAndDelete (no controller)", async () => {
     const team = await Team.create({ club: clubA._id, name: "Solo XI" });
     const match = await Match.create({
       club: clubA._id,
@@ -229,7 +243,9 @@ describe("Player/Statistic referential integrity (integration)", () => {
 
     await Team.findByIdAndDelete(team._id);
 
-    expect(await Match.countDocuments({ _id: match._id })).toBe(0);
+    const kept = await Match.findById(match._id);
+    expect(kept).toBeTruthy();
+    expect(kept.homeTeamName).toBe("Solo XI");
     expect(await Statistic.countDocuments({ team: team._id })).toBe(0);
   });
 });

@@ -50,4 +50,42 @@ const protect = async (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+/*  Same token handling as `protect`, but never rejects: a missing, malformed or
+    expired token just leaves `req.user` unset and the request continues as an
+    anonymous one.
+
+    This exists because a public GET can legitimately widen its result set for a
+    signed-in admin — the news list is the case that matters. `GET /news` is
+    mounted before `protect`, so `req.user` was ALWAYS undefined there and the
+    `isAdmin` branch in getAllNews could never run: drafts were hidden from the
+    admin UI too, making a freshly created (unpublished) article look like it had
+    never saved. */
+const optionalAuth = async (req, res, next) => {
+  try {
+    let token;
+    if (req.cookies && req.cookies.accessToken) {
+      token = req.cookies.accessToken;
+    } else if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+    ) {
+      token = req.headers.authorization.split(" ")[1];
+    } else if (req.cookies && req.cookies.jwt) {
+      token = req.cookies.jwt;
+    }
+
+    if (!token) return next();
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+    if (user && user.isActive !== false) {
+      req.user = user;
+    }
+  } catch {
+    /* Treat an invalid token as anonymous rather than blocking a public read. */
+  }
+
+  return next();
+};
+
+module.exports = { protect, optionalAuth };

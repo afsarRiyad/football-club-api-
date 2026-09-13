@@ -51,6 +51,13 @@ const newsSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    /* The story the editor wants in the big hero slot on the news page and the
+       homepage, instead of whichever article happens to be newest. Only one
+       article is featured at a time — see featureNews in the controller. */
+    isFeatured: {
+      type: Boolean,
+      default: false,
+    },
     publishedAt: {
       type: Date,
     },

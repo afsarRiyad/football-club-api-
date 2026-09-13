@@ -194,10 +194,15 @@ exports.getTeamStandings = catchAsync(async (req, res, next) => {
     .populate("homeTeam", "name slug logo")
     .populate("awayTeam", "name slug logo");
 
+  /* A team that has been deleted keeps its name here, so the matches it played are
+     still counted rather than silently dropped out of the table. */
+  const { resolveMatchSides } = require("../../../utils/matchSides");
+  const resolved = matches.map(resolveMatchSides);
+
   // Build standings from match results
   const standingsMap = {};
 
-  for (const match of matches) {
+  for (const match of resolved) {
     const home = match.homeTeam;
     const away = match.awayTeam;
     if (!home || !away) continue;

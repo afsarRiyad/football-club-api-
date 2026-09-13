@@ -48,10 +48,40 @@ const matchSchema = new mongoose.Schema(
       ref: "Team",
       required: [true, "Home team is required"],
     },
+    /* The opponent is usually one of the club's own Team documents, but it can
+       also be a one-off side that only exists for this fixture (a friendly
+       against a village XI, say). Those are stored as plain text and never
+       create a Team document, so awayTeam is optional and awayTeamName carries
+       the name instead. Exactly one of the two is expected to be set. */
     awayTeam: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Team",
-      required: [true, "Away team is required"],
+    },
+    awayTeamName: {
+      type: String,
+      trim: true,
+      maxlength: [120, "Away team name cannot exceed 120 characters"],
+      default: "",
+    },
+    /* ─── Name/logo snapshots ───
+       Both sides keep a copy of their name and logo. Two reasons, and both are
+       about not losing history: a fixture whose opponent was typed in by hand has
+       no Team document at all, and a Team that gets deleted later would otherwise
+       turn a played result into "TBD". The live Team is preferred when it still
+       exists (see the displayName virtuals), so a rename still shows through. */
+    homeTeamName: {
+      type: String,
+      trim: true,
+      maxlength: [120, "Home team name cannot exceed 120 characters"],
+      default: "",
+    },
+    homeTeamLogo: {
+      type: String,
+      default: "",
+    },
+    awayTeamLogo: {
+      type: String,
+      default: "",
     },
     matchDate: {
       type: Date,
@@ -104,6 +134,25 @@ const matchSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
+
+/* Display name for either side: the populated Team's name when this match
+   references a real team, otherwise the free-text opponent name. Exposed so the
+   public site and the admin never render "TBD" for a typed opponent. */
+matchSchema.virtual("awayTeamDisplayName").get(function () {
+  if (this.awayTeam && typeof this.awayTeam === "object" && this.awayTeam.name) {
+    return this.awayTeam.name;
+  }
+  return this.awayTeamName || "";
+});
+
+/* Same idea for the home side. The home team is still a required Team reference,
+   so this only falls back to the snapshot once that Team is gone. */
+matchSchema.virtual("homeTeamDisplayName").get(function () {
+  if (this.homeTeam && typeof this.homeTeam === "object" && this.homeTeam.name) {
+    return this.homeTeam.name;
+  }
+  return this.homeTeamName || "";
+});
 
 // Virtual for match title
 matchSchema.virtual("title").get(function () {

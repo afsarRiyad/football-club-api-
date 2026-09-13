@@ -11,6 +11,9 @@ exports.createNewsSchema = z.object({
   category: z.enum(categories).optional(),
   tags: z.array(z.string().trim()).optional(),
   isPublished: z.boolean().optional(),
+  /* Declared, or the validate middleware would strip it before the controller
+     ever sees it (Zod drops keys the schema does not mention). */
+  isFeatured: z.boolean().optional(),
 });
 
 exports.updateNewsSchema = z.object({
@@ -21,6 +24,7 @@ exports.updateNewsSchema = z.object({
   category: z.enum(categories).optional(),
   tags: z.array(z.string().trim()).optional(),
   isPublished: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
 });
 
 exports.newsIdParam = z.object({
