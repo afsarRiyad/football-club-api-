@@ -94,7 +94,10 @@ exports.upsertMatchFormation = catchAsync(async (req, res, next) => {
     existing.formation = formation || existing.formation;
     if (playerCount) existing.playerCount = playerCount;
     existing.startingXI = startingXI || existing.startingXI;
-    existing.captain = captain || existing.captain;
+    /* An explicit null or "" clears the captain. `captain || existing.captain`
+       meant a captain could be set but never removed — the old value came back
+       on every save. */
+    if (captain !== undefined) existing.captain = captain || null;
     existing.notes = notes !== undefined ? notes : existing.notes;
     // Force-set bench to handle old documents that don't have the field
     existing.set('bench', bench || []);

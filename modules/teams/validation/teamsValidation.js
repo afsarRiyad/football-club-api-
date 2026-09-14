@@ -46,6 +46,13 @@ exports.updateTeamSchema = z.object({
   formation: z.enum(formations).optional(),
   startingXI: z.array(startingXIEntry).max(11).optional(),
   bench: z.array(z.string().regex(/^[a-f\d]{24}$/i, "Invalid player ID")).optional(),
+  /* The formation editor merges the pitch XI into the team roster on save.
+     Unknown keys are stripped by the validator, so leaving `players` out here
+     silently discarded that merge and a team's roster never grew. */
+  players: z
+    .array(z.string().regex(/^[a-f\d]{24}$/i, "Invalid player ID"))
+    .max(60)
+    .optional(),
   isActive: z.boolean().optional(),
 });
 
