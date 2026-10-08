@@ -26,4 +26,18 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-module.exports = { apiLimiter, authLimiter };
+// Public "Request a Match" submissions — unauthenticated, so a single IP gets a
+// generous human quota rather than an open firehose into the admin's inbox.
+const matchRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  validate: { trustProxy: false }, // trust proxy configured in app.js
+  message: {
+    success: false,
+    message: "Too many match requests from this address. Please try again in an hour.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+module.exports = { apiLimiter, authLimiter, matchRequestLimiter };

@@ -1,6 +1,7 @@
 const MatchRequest = require("../model/MatchRequest");
 const AppError = require("../../../utils/AppError");
 const catchAsync = require("../../../utils/catchAsync");
+const { escapeRegex } = require("../../../utils/textGuards");
 
 // Get all match requests (with filters)
 exports.getAllMatchRequests = catchAsync(async (req, res, next) => {
@@ -8,18 +9,26 @@ exports.getAllMatchRequests = catchAsync(async (req, res, next) => {
   if (req.query.club) filter.club = req.query.club;
   if (req.query.status) filter.status = req.query.status;
 
-  // Text search across requesterName, requesterEmail, teamName
+  // Text search across requesterName, requesterEmail, teamName.
+  // The term is escaped before it reaches `$regex`: unescaped, a caller could
+  // pass a regex (`(?=)`-style lookaheads error out, `(a+)+$` pins the CPU) and
+  // the admin search box would be a remote DoS lever. `$`-prefixed keys are
+  // already stripped from the query by express-mongo-sanitize.
   if (req.query.search) {
-    const searchRegex = { $regex: req.query.search, $options: "i" };
-    filter.$or = [
-      { requesterName: searchRegex },
-      { requesterEmail: searchRegex },
-      { teamName: searchRegex },
-    ];
+    const term = String(req.query.search).trim().slice(0, 100);
+    if (term) {
+      const searchRegex = { $regex: escapeRegex(term), $options: "i" };
+      filter.$or = [
+        { requesterName: searchRegex },
+        { requesterEmail: searchRegex },
+        { teamName: searchRegex },
+      ];
+    }
   }
 
-  const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 10;
+  // Clamped so `?limit=1000000` cannot ask Mongo for the whole collection.
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
   const skip = (page - 1) * limit;
 
   const [requests, total] = await Promise.all([
